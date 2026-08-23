@@ -30,3 +30,7 @@
 .hero/cache/
 .hero/sessions/
 .hero/*.pid
+# Per-user grants for autonomous /drive runs. Initiative state under
+# .hero/drive/ does travel; a trust record must not — a clone would
+# otherwise inherit someone else's authorisation.
+.hero/drive/trust/

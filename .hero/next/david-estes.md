@@ -10,7 +10,7 @@ repo: davydotcom/omarchy-control4-plugin
 
 > Listen Apple Music should list personal stations via MSP navigator, not fake folders
 
-_possibly stale — 4 commit(s) since, last set 5h 23m ago_
+_possibly stale — 5 commit(s) since, last set 5h 23m ago_
 
 ## Last user ask
 
@@ -18,7 +18,11 @@ _possibly stale — 4 commit(s) since, last set 5h 23m ago_
 
 ## Suggested next prompt
 
-> design the Apple TV D-pad next — remote-command-metadata is done
+> let's tackle Add room to source
+
+_Rationale: highest-priority open feature: Add room to source (`add-room-to-source`)_
+
+_Source: auto-derived from open feature — `hero next suggest "..."` to override._
 
 ## Recent reflections
 

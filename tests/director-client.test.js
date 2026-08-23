@@ -15,7 +15,7 @@ const {
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
   STATUS_SIGN_IN_FAILED, STATUS_DIRECTOR_401, STATUS_CONNECTED,
   extractRooms, isRoomHidden, parseFocusFile, sortRoomsByNameThenId,
-  extractSources, sourceArray
+  extractSources, sourceArray, parseRoomVolume
 } = ctx
 
 function assert(cond, msg) {
@@ -238,5 +238,20 @@ assert(extractSources({ experiences: [{ type: "watch", room_id: 9 }] }, srcItems
 assert(sourceArray({ sources: { source: { id: 1 } } }).length === 1, "sourceArray wraps object")
 assert(sourceArray({ sources: { source: [{ id: 1 }, { id: 2 }] } }).length === 2, "sourceArray array")
 assert(extractSources(srcUi, srcItems, 9, "nope").map(s => s.id).join(",") === "33,1,59", "unknown mode is watch")
+
+const vol = parseRoomVolume(JSON.stringify([
+  { name: "CURRENT_VOLUME", value: "42" },
+  { name: "IS_MUTED", value: "1" }
+]))
+assert(vol.volume === 42 && vol.muted === true, "parseRoomVolume muted")
+const vol2 = parseRoomVolume(JSON.stringify([{ name: "CURRENT_VOLUME", value: 7 }]))
+assert(vol2.volume === 7 && vol2.muted === false, "parseRoomVolume unmuted missing IS_MUTED")
+assert(parseRoomVolume("{}").volume === null, "parseRoomVolume non-array")
+assert(parseRoomVolume("nope").volume === null, "parseRoomVolume invalid")
+const clamped = parseRoomVolume(JSON.stringify([{ name: "CURRENT_VOLUME", value: 140 }]))
+assert(clamped.volume === 100, "parseRoomVolume clamp")
+
+const setVol = JSON.parse(commandBody("SET_VOLUME_LEVEL", { LEVEL: 42 }))
+assert(setVol.command === "SET_VOLUME_LEVEL" && setVol.tParams.LEVEL === 42, "SET_VOLUME_LEVEL body")
 
 console.log("ok")

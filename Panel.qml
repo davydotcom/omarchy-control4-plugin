@@ -297,30 +297,35 @@ Panel {
           visible: root.hasFocusedRoom
           width: parent.width
           spacing: Style.space(8)
-          height: visible ? implicitHeight : 0
+          height: visible ? Math.max(volumeLabel.implicitHeight, volumeSlider.implicitHeight) : 0
 
-          Button {
-            width: (volumeRow.width - volumeRow.spacing * 2) / 3
-            text: "−"
-            foreground: root.barForeground
-            bordered: true
-            onClicked: if (root.session) root.session.pulseVolumeDown()
+          Text {
+            id: volumeLabel
+            width: Style.space(36)
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.session && root.session.muted ? "M" : String(root.session ? root.session.volume : 0)
+            color: root.barForeground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.body
+            horizontalAlignment: Text.AlignRight
           }
 
-          Button {
-            width: (volumeRow.width - volumeRow.spacing * 2) / 3
-            text: "Mute"
-            foreground: root.barForeground
-            bordered: true
-            onClicked: if (root.session) root.session.toggleMute()
-          }
-
-          Button {
-            width: (volumeRow.width - volumeRow.spacing * 2) / 3
-            text: "+"
-            foreground: root.barForeground
-            bordered: true
-            onClicked: if (root.session) root.session.pulseVolumeUp()
+          PanelSlider {
+            id: volumeSlider
+            bar: root.bar
+            width: parent.width - volumeLabel.width - volumeRow.spacing
+            anchors.verticalCenter: parent.verticalCenter
+            minimum: 0
+            maximum: 100
+            step: 1
+            integer: true
+            value: root.session ? root.session.volume : 0
+            opacity: root.session && root.session.muted ? 0.5 : 1
+            onReleased: function(v) {
+              if (root.session)
+                root.session.setVolume(v)
+            }
+            onRightClicked: if (root.session) root.session.toggleMute()
           }
         }
 

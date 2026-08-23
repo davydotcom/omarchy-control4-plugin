@@ -86,7 +86,7 @@ omarchy plugin validate "$HOME/.config/omarchy/plugins/io.github.davydotcom.cont
 - After that the panel is the room list; use the header gear to change login
 - When connected, pick a room in the panel; the chip shows that name
 - Watch / Listen lists sources for that room; tap one to select it
-- − / Mute / + pulse volume; Off turns the room off
+- Volume slider shows the room level (0–100); release to set; right-click mutes; Off turns the room off
 - Press Escape to close the panel
 
 ## Remove

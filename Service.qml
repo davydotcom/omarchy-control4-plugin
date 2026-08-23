@@ -32,6 +32,10 @@ Item {
   property string sourcesHint: ""
   property var _uiConfig: null
   property var _items: null
+  property int volume: 0
+  property bool muted: false
+  property var _volumeHoldUntil: 0
+  property int _volumeGen: 0
 
   property string _accountToken: ""
   property string _directorToken: ""
@@ -87,6 +91,9 @@ Item {
     _items = null
     sources = []
     sourcesHint = ""
+    volume = 0
+    muted = false
+    volumeTimer.stop()
     _setState("unconfigured")
   }
 
@@ -173,6 +180,7 @@ Item {
     roomsHint = ""
     persistFocus(match.id)
     _rebuildSources(true)
+    refreshVolume()
   }
 
   function setSourceMode(mode) {
@@ -206,26 +214,53 @@ Item {
     directorPost("/api/v1/items/" + focusedRoomId + "/commands", command, { deviceid: n }, function() {})
   }
 
-  function pulseVolumeUp() {
-    _roomCommand("PULSE_VOL_UP")
-  }
-
-  function pulseVolumeDown() {
-    _roomCommand("PULSE_VOL_DOWN")
+  function setVolume(level) {
+    var n = Math.round(Number(level))
+    if (!isFinite(n))
+      return
+    n = Math.max(0, Math.min(100, n))
+    volume = n
+    _volumeHoldUntil = Date.now() + 1500
+    _roomCommand("SET_VOLUME_LEVEL", { LEVEL: n })
   }
 
   function toggleMute() {
-    _roomCommand("MUTE_TOGGLE")
+    muted = !muted
+    _volumeHoldUntil = Date.now() + 1500
+    _roomCommand("MUTE_TOGGLE", {})
   }
 
   function roomOff() {
-    _roomCommand("ROOM_OFF")
+    _roomCommand("ROOM_OFF", {})
   }
 
-  function _roomCommand(command) {
+  function refreshVolume() {
+    if (sessionState !== "connected" || focusedRoomId === null || focusedRoomId === undefined) {
+      volumeTimer.stop()
+      return
+    }
+    volumeTimer.restart()
+    root._volumeGen += 1
+    var gen = root._volumeGen
+    var id = focusedRoomId
+    directorGet("/api/v1/items/" + id + "/variables?varnames=CURRENT_VOLUME,IS_MUTED", function(err, body) {
+      if (gen !== root._volumeGen)
+        return
+      if (err)
+        return
+      if (Date.now() < root._volumeHoldUntil)
+        return
+      var parsed = DirectorClient.parseRoomVolume(body)
+      if (parsed.volume !== null)
+        root.volume = parsed.volume
+      root.muted = parsed.muted === true
+    })
+  }
+
+  function _roomCommand(command, params) {
     if (sessionState !== "connected" || focusedRoomId === null || focusedRoomId === undefined)
       return
-    directorPost("/api/v1/items/" + focusedRoomId + "/commands", command, {}, function() {})
+    directorPost("/api/v1/items/" + focusedRoomId + "/commands", command, params || {}, function() {})
   }
 
   function _rebuildSources(allowFlip) {
@@ -365,6 +400,7 @@ Item {
       }
     }
     _rebuildSources(true)
+    refreshVolume()
   }
 
   function _refreshStatusText() {
@@ -733,6 +769,14 @@ Item {
       root._accountToken = ""
       root._startAccountAuth()
     }
+  }
+
+  Timer {
+    id: volumeTimer
+    interval: 2000
+    repeat: true
+    running: false
+    onTriggered: root.refreshVolume()
   }
 
   Component.onCompleted: mkdirProc.running = true

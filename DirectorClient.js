@@ -340,3 +340,31 @@ function extractSources(uiConfig, items, roomId, mode) {
   out.sort(sortRoomsByNameThenId)
   return out
 }
+
+function parseRoomVolume(raw) {
+  var volume = null
+  var muted = false
+  try {
+    var list = JSON.parse(String(raw || ""))
+    if (!Array.isArray(list))
+      return { volume: null, muted: false }
+    for (var i = 0; i < list.length; i++) {
+      var row = list[i]
+      if (!row)
+        continue
+      var name = String(row.name || "")
+      if (name === "CURRENT_VOLUME") {
+        var n = Number(row.value)
+        if (isFinite(n))
+          volume = Math.max(0, Math.min(100, Math.round(n)))
+      }
+      if (name === "IS_MUTED") {
+        var v = row.value
+        muted = v === true || v === "true" || v === "1" || v === 1
+      }
+    }
+  } catch (e) {
+    return { volume: null, muted: false }
+  }
+  return { volume: volume, muted: muted }
+}

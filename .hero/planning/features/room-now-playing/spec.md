@@ -50,7 +50,7 @@ Will be produced by `/design room-now-playing`. No file-level Changes until then
 - No artwork/metadata browser beyond source name + power/volume/mute
 - No lights/climate/shades status
 - Do not deliver before `watch-and-listen`
-- Volume *buttons* are `room-volume-mute-off`; this child is readout
+- Volume *slider* and mute are `room-volume-mute-off` (including `CURRENT_VOLUME` poll for the slider). This child is chip/header now-playing, not a second volume control.
 
 ## Risks
 

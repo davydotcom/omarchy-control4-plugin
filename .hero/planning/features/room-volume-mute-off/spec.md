@@ -20,76 +20,79 @@ claimed_by: david-estes
 
 ## Context
 
-Fifth child of `control4-focused-room-remote`. User asked to land this with Watch/Listen. Technical depends-on is `focused-room`; delivery is after (or with) the source picker so VOL/OFF address a room that can have a source. pyControl4 room commands on `/api/v1/items/{roomId}/commands`: `PULSE_VOL_UP` / `PULSE_VOL_DOWN` (empty params), `MUTE_TOGGLE`, `ROOM_OFF` ([pyControl4 room](https://lawtancool.github.io/pyControl4/room.html)). Existing `directorPost` already wraps `commandBody`. Now-playing readout of volume/mute is the next child.
+Fifth child of `control4-focused-room-remote`. First slice shipped pulse `−` / Mute / `+`. User asked for a **slider** so they can see the level and jump to it. pyControl4: `SET_VOLUME_LEVEL` `{ LEVEL: 0–100 }`, `MUTE_TOGGLE`, `ROOM_OFF`, variables `CURRENT_VOLUME` / `IS_MUTED` via `GET /api/v1/items/{id}/variables?varnames=CURRENT_VOLUME,IS_MUTED` ([pyControl4 room](https://lawtancool.github.io/pyControl4/room.html)). Omarchy audio uses `qs.Ui` `PanelSlider` (0–1) with right-click mute. This child now owns volume *readout* for the slider; chip now-playing stays `room-now-playing`.
 
 ## Goal
 
-Volume up/down, mute toggle, and room off as buttons on the details panel for `focusedRoomId`. Pulse, not a slider. Off is a separate row so it is not next to minus. No mixer. No now-playing numbers.
+Focused-room volume is a slider showing 0–100. Drag/release posts `SET_VOLUME_LEVEL`. Poll `CURRENT_VOLUME` so the fill matches the Director. Right-click mutes (`MUTE_TOGGLE`, same as Omarchy audio). Off stays on the next row.
 
 ## Kickoff
 
-Focused-room volume up/down, mute toggle, and Off — buttons, not a mixer.
+Replace − / Mute / + with a volume slider that shows CURRENT_VOLUME and posts SET_VOLUME_LEVEL.
 
-**Status:** delivering — − / Mute / + / Off buttons live on the focused-room panel. Commands not CLI-clicked.
+**Status:** delivering — pulse buttons live; slider design just landed.
 
-**Pick up at:** tap + / Mute / Off on Deck; confirm Director volume/off; then verify.
+**Pick up at:** parse `CURRENT_VOLUME` / `IS_MUTED`, poll while focused, `PanelSlider` 0–100 integer, POST on release only.
 
 → `/deliver room-volume-mute-off`
 
-**Files:** `Service.qml`, `Panel.qml`, `README.md`
+**Files:** `DirectorClient.js`, `Service.qml`, `Panel.qml`, `tests/director-client.test.js`, `README.md`
 
-**Skip:** slider / `SET_VOLUME_LEVEL`; mixer; play/pause; whole-house; now-playing poll.
+**Skip:** pulse buttons; mixer; play/pause; whole-house; posting `SET_VOLUME_LEVEL` on every `moved`.
 
 ## Approach
 
-**Commands via existing `directorPost` only.** Path `/api/v1/items/{focusedRoomId}/commands`. Params `{}` except none of these need tParams keys. No-op if not connected or `focusedRoomId` is null.
+**Read.** `directorGet("/api/v1/items/" + focusedRoomId + "/variables?varnames=CURRENT_VOLUME,IS_MUTED")`. Parse in `DirectorClient.parseRoomVolume(raw)` → `{ volume: number|null, muted: bool }`. Volume clamped 0–100. `IS_MUTED` true for `true` / `"1"` / `1`. Missing/invalid → keep previous volume, muted false if unknown on first read.
 
-```
-function pulseVolumeUp()
-function pulseVolumeDown()
-function toggleMute()
-function roomOff()
-```
+**Poll** every 2s while `connected` and a focused room (Timer). Also on focus change. While `Date.now() < _volumeHoldUntil` (1.5s after a local set), ignore poll so the slider does not snap back mid-drag.
 
-One private `_roomCommand(command)` that posts and ignores the callback (transport blip does not change UI in this child). Do not open GET variable polling here.
+**Write.** `setVolume(level)`: clamp 0–100 integer, set `volume` immediately, hold poll, `directorPost(..., "SET_VOLUME_LEVEL", { LEVEL: n })`. POST on `PanelSlider.released` (and wheel, which already emits released). Do **not** POST on every `moved`.
 
-**Chrome.** Visible only when connected with a focused room, below the source picker:
+**Mute.** `toggleMute()` still `MUTE_TOGGLE`. Bound to `PanelSlider.rightClicked`. Slider `opacity` 0.5 while `muted`.
 
-- One `Row` of three `qs.Ui` `Button`s: `−` / `Mute` / `+` (pulse down, `MUTE_TOGGLE`, pulse up). Not a slider.
-- `Off` on the next row, full width, `bordered: true`, `ROOM_OFF`. Not in the volume row.
+**Chrome.** Connected + focused, below sources:
 
-No confirm dialog. No mute selected-state (that needs `IS_MUTED` from now-playing).
+- Row: numeric label (`volume` or `M` if muted) + `PanelSlider` (`minimum: 0`, `maximum: 100`, `integer: true`, `step: 1`, `bar: root.bar`).
+- Next row: Off, full width, `ROOM_OFF`.
+
+Remove `pulseVolumeUp` / `pulseVolumeDown` from the panel.
 
 ## Changes
 
-1. `Service.qml` — `_roomCommand`, the four functions. No new HTTP client.
-2. `Panel.qml` — volume row + Off button, gated on connected + focused room.
-3. `README.md` — volume / mute / Off after a room is focused.
+1. `DirectorClient.js` — `parseRoomVolume`.
+2. `Service.qml` — `volume`, `muted`, `setVolume`, poll Timer, hold-off after set; `_roomCommand` takes optional params; drop pulse helpers used only by the old row.
+3. `Panel.qml` — `PanelSlider` + level label; right-click mute; keep Off.
+4. `tests/director-client.test.js` — parse volume/mute fixtures.
+5. `README.md` — slider, right-click mute, Off.
 
 ## Boundaries
 
 - Not a mixer: no per-device levels, EQ, grouping
-- No `SET_VOLUME_LEVEL` slider
 - No play/pause/stop
 - No whole-house / party volume
-- No now-playing poll (`room-now-playing`)
+- Chip now-playing text is still `room-now-playing`
+- Do not flood `SET_VOLUME_LEVEL` on drag
 
 ## Risks
 
-- Pulse with no source may no-op on the Director — still send the command; do not fake a level.
-- `ROOM_OFF` next to `−` would be an easy miss-hit — keep Off on its own row.
-- Command errors are silent in this child (no toast API); status text stays session status.
+- Poll vs slider fight — hold-off after set is mandatory.
+- Mute without a selected source may no-op; still send the command.
+- `ROOM_OFF` stays off the slider row.
 
 ## Acceptance Criteria
 
-- WHEN the user activates volume up THE SYSTEM SHALL `directorPost` `PULSE_VOL_UP` for `focusedRoomId`
-- WHEN the user activates volume down THE SYSTEM SHALL `directorPost` `PULSE_VOL_DOWN` for `focusedRoomId`
-- WHEN the user activates mute THE SYSTEM SHALL `directorPost` `MUTE_TOGGLE` for `focusedRoomId`
-- WHEN the user activates Off THE SYSTEM SHALL `directorPost` `ROOM_OFF` for `focusedRoomId`
-- THE SYSTEM SHALL present these as buttons, not a slider or mixer
-- IF there is no focused room THE SYSTEM SHALL hide volume, mute, and Off
-- THE SYSTEM SHALL place Off on a different row from volume up/down
+- WHEN a room is focused THE SYSTEM SHALL show a 0–100 volume slider whose value is `CURRENT_VOLUME`
+- WHEN the user releases the slider THE SYSTEM SHALL `directorPost` `SET_VOLUME_LEVEL` with `{ LEVEL: <0–100> }` for `focusedRoomId`
+- THE SYSTEM SHALL NOT post `SET_VOLUME_LEVEL` on every drag tick
+- WHEN the user right-clicks the slider THE SYSTEM SHALL `directorPost` `MUTE_TOGGLE`
+- WHEN the user activates Off THE SYSTEM SHALL `directorPost` `ROOM_OFF`
+- IF there is no focused room THE SYSTEM SHALL hide the slider and Off
+- THE SYSTEM SHALL place Off on a different row from the slider
 
 ## Validation
 
-Live copy + `omarchy restart shell` (Loader `Panel.qml`). Manual: focused room → `−` / `+` change Director volume; Mute toggles; Off turns the room off. Unfocused: buttons hidden. `node tests/director-client.test.js` still passes (no new join required).
+```
+node tests/director-client.test.js
+```
+
+Live copy + `omarchy restart shell`. Manual: focused room → slider shows a number; drag; Director volume matches; right-click mutes; Off still works. Unfocused: slider hidden.

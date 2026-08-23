@@ -1,6 +1,6 @@
 # Project Snapshot — omarchy-control4-plugin
 
-_Last refreshed: 2026-08-23T19:07:58Z · projected from 33 source nodes_
+_Last refreshed: 2026-08-23T19:36:05Z · projected from 33 source nodes_
 
 ## Surfaces
 
@@ -16,11 +16,11 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 
 - **Control4 focused-room remote** (surface: —) — 4/10 specs done; in flight: halo-panel-chrome, listen-library-browse, room-volume-mute-off, volume-slider-reads-room-name, watch-and-listen
 - **Multi-room audio** (surface: —) — 0/3 specs done
-- **Watch-source virtual remote** (surface: —) — 0/4 specs done
+- **Watch-source virtual remote** (surface: —) — 1/4 specs done
 
 ## Recently completed (last 14 days)
 
-- **(unassigned)** — credentials-gear, focused-room, director-session, plugin-scaffold
+- **(unassigned)** — remote-command-metadata, credentials-gear, focused-room, director-session, plugin-scaffold
 
 ## Next up across surfaces
 
@@ -32,7 +32,7 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 
 ## Open risks & blockers
 
-- **Blocked specs (8):** `add-room-to-source` (waits on room-session-model); `halo-panel-chrome` (waits on watch-and-listen, room-volume-mute-off); `listen-library-browse` (waits on watch-and-listen); `multi-room-volume-view` (waits on room-session-model); `room-volume-mute-off` (waits on watch-and-listen); `virtual-remote-dpad` (waits on remote-command-metadata); `virtual-remote-numbers` (waits on virtual-remote-dpad); `virtual-remote-transport` (waits on virtual-remote-dpad).
+- **Blocked specs (7):** `add-room-to-source` (waits on room-session-model); `halo-panel-chrome` (waits on watch-and-listen, room-volume-mute-off); `listen-library-browse` (waits on watch-and-listen); `multi-room-volume-view` (waits on room-session-model); `room-volume-mute-off` (waits on watch-and-listen); `virtual-remote-numbers` (waits on virtual-remote-dpad); `virtual-remote-transport` (waits on virtual-remote-dpad).
 - **Unassigned specs (21) — no `surface:` declared.** Run `hero snapshot assign` to bucket them.
 
 ## Snapshot health

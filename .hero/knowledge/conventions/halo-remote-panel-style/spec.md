@@ -34,10 +34,21 @@ Every visible chrome in `Panel.qml` (and any later QML the user sees in the popu
 | `halo.surface` | `#1C1C1C` | Idle list row |
 | `halo.surfaceSelected` | `#2E2E2E` | Selected row / selected Watch-Listen |
 | `halo.text` | `#F2F2F2` | Primary labels |
-| `halo.textMuted` | `#9B9B9B` | Status, hints, unselected secondary |
+| `halo.textMuted` | `#9B9B9B` | Status, hints, and **non-interactive** rows (list section headers) |
+| `halo.textSecondary` | `#C9C9C9` | De-emphasized but **available** actions — Back, Off |
 | `halo.accent` | `#E87722` | Selection indicator, slider fill, focused affordance only |
 | `halo.border` | `#2A2A2A` | Hairline row/card edge |
-| `halo.danger` | `#9B9B9B` | Off — muted, not alarm red |
+| `halo.danger` | `#C9C9C9` | Off — de-emphasized, not alarm red, and not `textMuted` |
+
+**Muted is not the same as unavailable.** `halo.textMuted` and `halo.textSecondary`
+both pass AA on `halo.surface` (6.1:1 and 10.3:1), so this is a semantic split,
+not a contrast fix. `textMuted` is the status/hint voice; painting a *pressable*
+row in it makes it read as disabled even though it is perfectly legible, which is
+exactly what went wrong with Back and Off (`back-off-buttons-look-disabled`).
+Secondary actions take `textSecondary` and keep their row fill, border, and
+pointer cursor. Non-interactive rows take `textMuted` **and** drop the fill,
+border, and pointer cursor — the affordance, not just the colour, is what says
+"not pressable".
 
 **Layout (top → bottom), one column:**
 

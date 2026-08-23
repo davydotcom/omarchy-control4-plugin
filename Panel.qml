@@ -36,6 +36,7 @@ Panel {
   readonly property color haloSurfaceSelected: "#2E2E2E"
   readonly property color haloText: "#F2F2F2"
   readonly property color haloTextMuted: "#9B9B9B"
+  readonly property color haloTextSecondary: "#C9C9C9"
   readonly property color haloAccent: "#E87722"
   readonly property color haloBorder: "#2A2A2A"
   readonly property color panelFg: haloText
@@ -72,14 +73,21 @@ Panel {
     id: haloRow
     property string label: ""
     property bool chosen: false
-    property bool mutedLook: false
+    // De-emphasized but pressable (Back, Off). Distinct from `heading`:
+    // painting an action in the status/hint grey makes it read as disabled.
+    property bool secondary: false
+    // A list section header — not a control. Drops the fill, border, and
+    // pointer cursor, because colour alone does not say "not pressable".
+    property bool heading: false
     property bool centered: false
     signal tapped()
 
     height: root.rowHeight
-    color: chosen ? root.haloSurfaceSelected : root.haloSurface
-    border.color: root.haloBorder
-    border.width: 1
+    color: heading
+      ? "transparent"
+      : (chosen ? root.haloSurfaceSelected : root.haloSurface)
+    border.color: heading ? "transparent" : root.haloBorder
+    border.width: heading ? 0 : 1
 
     Rectangle {
       width: 2
@@ -96,7 +104,9 @@ Panel {
       anchors.rightMargin: Style.space(8)
       anchors.verticalCenter: parent.verticalCenter
       text: haloRow.label
-      color: haloRow.mutedLook ? root.haloTextMuted : root.haloText
+      color: haloRow.heading
+        ? root.haloTextMuted
+        : (haloRow.secondary ? root.haloTextSecondary : root.haloText)
       elide: Text.ElideRight
       horizontalAlignment: haloRow.centered ? Text.AlignHCenter : Text.AlignLeft
       font.family: root.bar ? root.bar.fontFamily : Style.font.family
@@ -105,7 +115,8 @@ Panel {
 
     MouseArea {
       anchors.fill: parent
-      cursorShape: Qt.PointingHandCursor
+      enabled: !haloRow.heading
+      cursorShape: haloRow.heading ? Qt.ArrowCursor : Qt.PointingHandCursor
       onClicked: haloRow.tapped()
     }
   }
@@ -436,7 +447,7 @@ Panel {
             width: parent.width
             height: visible ? root.rowHeight : 0
             label: "Back"
-            mutedLook: true
+            secondary: true
             onTapped: if (root.session) root.session.browseBack()
           }
 
@@ -531,7 +542,7 @@ Panel {
           HaloRow {
             width: parent.width
             label: "Off"
-            mutedLook: true
+            secondary: true
             onTapped: if (root.session) root.session.roomOff()
           }
         }
@@ -580,7 +591,7 @@ Panel {
               required property int index
               width: browseList.width
               label: root.rowLabel(modelData)
-              mutedLook: !!(modelData && modelData.isHeader)
+              heading: !!(modelData && modelData.isHeader)
               onTapped: if (root.session) root.session.browseTap(index)
             }
           }

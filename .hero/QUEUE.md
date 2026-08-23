@@ -6,7 +6,7 @@
 
 # Hero Ready Queue
 
-_Generated: 2026-08-23T19:07:58Z · 9 ready specs_
+_Generated: 2026-08-23T19:36:16Z · 9 ready specs_
 
 ## volume-slider-reads-room-name — Volume slider reads room name not CURRENT_VOLUME
 _bug · delivering · horizon: now_
@@ -103,20 +103,20 @@ After Watch selects a source, the panel shows a virtual remote whose buttons com
 
 ---
 
-## remote-command-metadata — Remote command metadata
+## virtual-remote-dpad — Virtual remote D-pad
 _feature · planning · horizon: next_
 
-Turn each item's `commands[]` and `navigator_display_option` into a button-capability model. Parser only, no UI.
+D-pad, Menu, Enter for the selected watch source — rendered from metadata, Halo-styled.
 
-**Status:** planning — metadata verified live, parser not written.
+**Status:** planning — blocked on `remote-command-metadata` and on one live command POST proving the endpoint.
 
-**Pick up at:** `/design remote-command-metadata`, then implement alongside tests the way `parseMspTabs` / `parseTuneInList` were.
+**Pick up at:** `/design virtual-remote-dpad`. Before UI work, confirm one live press moves the Apple TV.
 
-→ `/design remote-command-metadata`
+→ `/design virtual-remote-dpad`
 
-**Files:** `DirectorClient.js`, `tests/director-client.test.js`
+**Files:** `Service.qml`, `Panel.qml`, `.hero/planning/features/virtual-remote-dpad/spec.md`
 
-**Skip:** any `Panel.qml` change; sending commands; per-brand tables; driver icon fetching.
+**Skip:** transport row (sibling), digits (sibling), driver icon art, per-brand layouts.
 
 ---
 

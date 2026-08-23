@@ -1,6 +1,6 @@
 # Project Snapshot — omarchy-control4-plugin
 
-_Last refreshed: 2026-08-23T16:37:39Z · projected from 30 source nodes_
+_Last refreshed: 2026-08-23T19:07:58Z · projected from 33 source nodes_
 
 ## Surfaces
 
@@ -39,5 +39,5 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 
 - Surfaces detected: 0 (inferred: 0 · overrides applied: 0)
 - Specs covered: 0/21 (0%)
-- Projection generation: 0ms · Source nodes: 30
+- Projection generation: 0ms · Source nodes: 33
 

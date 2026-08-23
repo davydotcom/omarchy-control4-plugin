@@ -5,7 +5,7 @@ Project shape: see [SNAPSHOT.md](.hero/SNAPSHOT.md).
 <!-- hero:managed-end -->
 
 ---
-updated: 2026-08-23T16:37:39Z
+updated: 2026-08-23T19:07:58Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
@@ -15,15 +15,21 @@ Run `git log --oneline -10` for recent commits.
 
 ## Next
 
-- **Focused room** (`focused-room`, planning)
+- **Add room to source** (`add-room-to-source`, planning)
 
-→ `/deliver focused-room`
+→ `/deliver add-room-to-source`
 
 ## Blocked on
 
-- **room-now-playing** ← waiting on `focused-room` (planning)
-- **room-volume-mute-off** ← waiting on `focused-room` (planning)
-- **watch-and-listen** ← waiting on `focused-room` (planning)
+- **add-room-to-source** ← waiting on `room-session-model` (planning)
+- **halo-panel-chrome** ← waiting on `room-volume-mute-off` (delivering)
+- **halo-panel-chrome** ← waiting on `watch-and-listen` (delivering)
+- **listen-library-browse** ← waiting on `watch-and-listen` (delivering)
+- **multi-room-volume-view** ← waiting on `room-session-model` (planning)
+- **room-volume-mute-off** ← waiting on `watch-and-listen` (delivering)
+- **virtual-remote-dpad** ← waiting on `remote-command-metadata` (planning)
+- **virtual-remote-numbers** ← waiting on `virtual-remote-dpad` (planning)
+- **virtual-remote-transport** ← waiting on `virtual-remote-dpad` (planning)
 
 ## Tried and failed
 
@@ -33,6 +39,7 @@ Nothing this session.
 
 - Control4 focused-room remote — `control4-focused-room-remote`
 - In-process Director REST — `in-process-director-rest`
+- MSP browse needs a navigator session — `msp-browse-needs-navigator-session`
+- Multi-room audio — `multi-room-audio`
 - Plugin ID from day one — `plugin-id-from-day-one`
-- Rooms from ui_configuration joined to items — `rooms-from-ui-config-join-items`
 

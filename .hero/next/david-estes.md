@@ -1,6 +1,6 @@
 ---
 user: david-estes
-updated: 2026-08-23T16:14:29Z
+updated: 2026-08-23T19:07:58Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
@@ -10,13 +10,19 @@ repo: davydotcom/omarchy-control4-plugin
 
 > Listen Apple Music should list personal stations via MSP navigator, not fake folders
 
+_possibly stale — 3 commit(s) since, last set 4h 54m ago_
+
 ## Last user ask
 
 > ok we got a lot farther using grok on this. lets keep it going apple music browsing works now, awesome. but Tune In doesnt yet for grabbing radio stations, can you do that one next on listen to audio source
 
 ## Suggested next prompt
 
-> open the Control4 panel — chip should be Deck/Connected, then Listen → Apple Music → Stations and play a station on the Deck
+> let's tackle Add room to source
+
+_Rationale: highest-priority open feature: Add room to source (`add-room-to-source`)_
+
+_Source: auto-derived from open feature — `hero next suggest "..."` to override._
 
 ## Recent reflections
 

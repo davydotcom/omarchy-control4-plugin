@@ -44,6 +44,8 @@ Load the `spec-format` skill before writing any spec. Also load the `spec-sizing
 
 Also load the `spec-composition` skill. Platform requests routinely produce multi-spec scopes — migrations span subsystems, refactors touch multiple services, scaling work usually has 2+ independent phases — so the routing trigger fires often here. If the request names multiple deliverables, you identify ≥ 2 independent sub-deliverables during clarification, or the rolled-up size reaches `large`, fire the routing nudge from the skill **before writing any individual spec**. The user picks `/compose` (initiative-first phasing) or proceeding with N siblings. Routing nudge precedes the sizing nudge when both would apply; see the Precedence section of `spec-composition`.
 
+When you materialize a sequenced list into initiative **child stubs**, emit the structured signals the `/drive` judge reads — don't leave them in prose only. **Stamp `priority:` on every child** (and `severity:` on `bug`-type children) per the mapping, and for **every overlap seam** — platform work has real ones (schema-before-code, dual-write ordering, shared-migration files) — emit a **reciprocal `conflicts-with`** relation on **both** named children (one edge each — the judge honors outbound edges only). Keep the Wave table and overlap narrative, and hold the prose ⇄ relation sync invariant (no orphan prose, no orphan relation). The `spec-format` "Child-stub authoring contract" is the source of truth for the mapping, reciprocity, sync invariant, and preserve-on-materialize rules.
+
 1. Understand the platform or architectural objective clearly
 2. Use brownfield-architect to analyze the existing system before proposing changes
 3. Use architecture-reviewer when complexity or migration risk may be underestimated
@@ -60,24 +62,15 @@ Also load the `spec-composition` skill. Platform requests routinely produce mult
 
 ## Delivery phase (executing specs)
 
-Load the `context-injection` skill before starting delivery.
+Load the `context-injection` and `agent-reliability` skills before starting delivery.
 
-When invoked for `/deliver`:
-1. Read the spec from the provided path
-2. Run `hero relevant <changed-files>` to gather context for the files this work will touch
-3. Check for conflicts: use `hero_conflicts` via MCP or inspect `hero list --status delivering` plus the spec Changes sections — if another spec is in-flight touching the same files, pause and surface the conflict before proceeding
-3b. **Sizing nudge**: load the `spec-sizing` skill. Read the spec's declared `size:` and any `size_ack:`. Run `hero size --check` (or read `hero_warnings` size-drift entries) to see drift. Surface the nudge per the schedule in the skill — platform specs commonly land in `x-large`/`giant` territory, so expect strong/super-strong recommendations toward `/split` or `/compose`. If drift is flagged, bump declared via `hero size <slug> <tier>`. Never block: record the user's call and proceed. The skill carries paste-ready phrasing — quote from it. Also call `hero size --check --summary` (or read the `size_drift` field from `hero_pulse` / `hero_kickoff`) to see the workspace-wide ambient drift count. If non-empty, surface the hint verbatim in your handoff/output — it's the invitation to run `/roadmap-review`. Do not enumerate drifted specs; that's `/roadmap-review`'s job.
-4. Sequence implementation to reduce migration and rollout risk
-5. When delegating to an engineer or specialist agent, include both the spec and the context block in the handoff — spec first, then context block, then any delivery lead commentary
-6. Delegate to engineer for code changes (it auto-detects the stack)
-7. Involve migration-engineer for data migrations, schema evolution, or system migrations with rollback concerns — this is especially important for platform work
-8. Involve database-engineer for data-shape or migration concerns
-9. Involve test-architect when platform changes affect testing strategy or introduce new testing patterns
-10. Involve dependency-analyst when platform changes add, upgrade, or remove dependencies
-11. Involve functional-qa-engineer when regression risk is significant
-12. Involve devops-engineer, release-engineer, security-reviewer, or documentation-engineer when platform changes require them
-13. On completion, move the spec from `planning/` to `specs/` and update its status to `completed`
-14. If a tracker is configured, update the issue
+Platform delivery follows **feature-delivery-lead's "Delivery phase" verbatim** — same modes (supervised/autopilot/dry-run), same steps 1-21, same Completion Ledger validation (per the `completion-ledger` skill), same cold audit, same `hero spec verify` close. Open `domains/engineering/agents/feature-delivery-lead.md` and execute that section exactly; do not improvise a parallel procedure. In one sentence: ledger validation → cold audit → `hero spec verify <slug>` is the only path to `completed` — never hand-edit `status: completed` or move the spec to `specs/` by hand.
+
+Platform work modulates emphasis within that shared procedure, not the procedure itself:
+
+- Sequence implementation to minimize migration and rollout risk — platform changes often have a correct order (schema before code, dual-write before cutover) that feature work doesn't.
+- Always involve migration-engineer on rollback-risky work (data migrations, schema evolution, system migrations) — pull it in earlier than the shared procedure's step 10 would by default.
+- Involve brownfield-architect before any structural change, even if the shared procedure's steps haven't reached an architecture checkpoint yet.
 
 ## Rules
 

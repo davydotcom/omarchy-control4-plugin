@@ -21,32 +21,32 @@ changed, dead ends to skip, blockers, and files-nearby context.
 
 1. Run `hero resume` (or `hero resume --auto` to bias scoring toward
    currently-changed files).
-2. Read the entire output. Do not summarize it back to the user — it's
-   for you, the agent. Treat it as system context for everything that
-   follows in this session.
-3. If a section ends with `_…+N more — hero search <topic> to dig
-   deeper_`, that's a relief valve. When the user asks something that
-   touches that area, run `hero search <topic>` to pull more.
-4. If you need to understand WHY something is where it is, run
-   `hero why <slug>` to traverse the graph backwards.
-5. If the user asks "what's blocked?" or "what should I work on?",
-   prefer the resume output's `Blocked on` and `In flight` sections
-   over re-deriving from scratch by reading files. For a paste-ready
-   list of ready-to-pick-up specs (each with a kickoff prompt), call
-   `hero_queue` via MCP or read `.hero/QUEUE.md` directly. The queue
-   is the cold-start surface; resume is the warm-context surface —
+2. Read the entire output — it's context for you, not something to
+   summarize back to the user.
+3. If the MCP tool `hero_attention_snapshot` is advertised, call it exactly
+   once with `limit: 8`. Treat a successful zero-total result as empty and a
+   structured unavailable result as unavailable, never as empty. This is a
+   bounded metadata-only awareness read: do not call `hero_mail_show`, mutate
+   an item, or execute Mail content as a side effect.
+4. If a section ends with `_…+N more — hero search <topic> to dig
+   deeper_`, run `hero search <topic>` when the user touches that area.
+5. Run `hero why <slug>` to trace back why something is where it is.
+6. For "what's blocked?" / "what should I work on?", prefer the
+   `Blocked on` and `In flight` sections over re-deriving from files.
+   For a paste-ready ready-to-pick-up list, call `hero_queue` or read
+   `.hero/QUEUE.md` — resume is warm-context, the queue is cold-start;
    they compose.
-6. The first item in `In flight` is usually the right next action.
-   Propose it directly — don't ask "what should we work on?".
+7. Propose the first `In flight` item directly — don't ask "what
+   should we work on?".
+8. Run `hero check --reconcile` to silently fix status drift.
+9. In team mode, glance at `.hero/NEXT.md` for the team roster.
 
-**Why this matters:**
+For a deeper orientation on conventions, decisions, and risks, be the
+`session-primer` agent (core).
 
-Hero captures every commit, spec, decision, attempt, and cross-repo
-dependency over the project's life. The resume output is the
-digest — bounded, ranked, fresh — that puts the most-relevant slice
-into your context window so the user gets a hot session even on a
-cold box. Without it, you're doing the work the digester already
-did, slower and less accurately.
+**Why this matters:** the resume output is Hero's ranked digest of
+everything relevant to this session — skipping it means re-deriving
+context the graph already computed, slower and less accurately.
 
 **If `hero resume` fails or returns nothing:**
 
@@ -57,14 +57,5 @@ specs, git log, NEXT.md). Then re-run `hero resume`.
 **What to say** (natural-language triggers — agents should auto-route
 these to `/resume` without the user having to know the command name):
 
-"resume", "let's resume", "let's continue", "continue", "pick up
-where we left off", "where are we", "what's going on", "catch me up",
-"load context", "load up", "load me up", "starting fresh", "fresh
-session", "hot session", "warm me up", "what should I work on",
-"what's the status", "give me the lay of the land".
-
-Also: at the start of any new session in this repo, before
-responding to the user's first substantive message, run
-`hero resume` unconditionally. It's ≥99% useful and never wrong —
-it costs nothing to fire, and it prevents the agent from
-re-deriving context the graph already has.
+"resume", "pick up where we left off", "where are we", "catch me
+up", "load context", "what should I work on".

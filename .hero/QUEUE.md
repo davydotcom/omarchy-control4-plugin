@@ -6,7 +6,7 @@
 
 # Hero Ready Queue
 
-_Generated: 2026-08-23T16:37:39Z · 9 ready specs_
+_Generated: 2026-08-23T19:07:58Z · 9 ready specs_
 
 ## volume-slider-reads-room-name — Volume slider reads room name not CURRENT_VOLUME
 _bug · delivering · horizon: now_

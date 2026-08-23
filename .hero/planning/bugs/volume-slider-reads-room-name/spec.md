@@ -55,9 +55,9 @@ Parse `varName` (fallback `name` only if it is actually `CURRENT_VOLUME` / `IS_M
 
 Volume slider stays 0 because parse uses `name` (room title) instead of `varName`.
 
-**Status:** planning — live payload confirmed `varName`/`value` 32 on Deck.
+**Status:** delivering — parser now keys `varName`; tests include live Deck shape (`value` 32, `name` Deck).
 
-**Pick up at:** `DirectorClient.parseRoomVolume` + fixtures matching the Director shape; copy live; restart shell.
+**Pick up at:** confirm the slider shows ~32 on Deck, then `hero spec verify volume-slider-reads-room-name`.
 
 → `/deliver volume-slider-reads-room-name`
 

@@ -1,25 +1,30 @@
 ---
 user: david-estes
-updated: 2026-08-23T12:08:55Z
+updated: 2026-08-23T16:14:29Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
 # david-estes's handoff
 
+## Session goal
+
+> Listen Apple Music should list personal stations via MSP navigator, not fake folders
+
 ## Last user ask
 
-> i think we closed the session mid work
+> ok we got a lot farther using grok on this. lets keep it going apple music browsing works now, awesome. but Tune In doesnt yet for grabbing radio stations, can you do that one next on listen to audio source
 
 ## Suggested next prompt
 
-> close out focused-room — ledger the live Base Fam chip, commit the uncommitted delivery, mark the spec completed
+> open the Control4 panel — chip should be Deck/Connected, then Listen → Apple Music → Stations and play a station on the Deck
 
 ## Recent reflections
 
-- Room catalog is ui_configuration watch/listen room_ids joined to items (typeName===room); names and roomHidden live on the item, not the experience.
-- Omarchy first-party HTTP is Quickshell Process + curl (weather Panel.qml), not QML XMLHttpRequest; LAN Director needs curl -k
-- omarchy plugin clone omarchy.clock --edit replaces the built-in clock; new widgets copy files into ~/.config/omarchy/plugins/<id>/ with a davydotcom ID from day one
-- Clone-ID from omarchy plugin clone is the live plugin id until publish; this git repo is not ~/.config/omarchy/plugins/ until that path is designed.
+- FileView.setText is async and no-ops on identical text; deleting http-body.json after POST makes the next accountAuth curl exit 26 as Network error
+- GetTabList was firing during socket.io subscribe with no poll in flight, so OnDataToUI was dropped.
+- MSP lists arrive on socket.io OnDataToUI after datatoui subscribe; Browse ARGS must be <arg name=tabId> not nested tags.
+- KeyboardPanel card color is hardcoded to Color.popups.background; Halo fill is an inner Rectangle with padding 0. IPC summon opens then dismisses before a screenshot.
+- MSP Browse/GetTabList POSTs never return the list; DATA_RECEIVED goes to a navigator NAVID. Director socket.io is datatoui variables, not that list.
 
 ## Tried and failed (this session)
 

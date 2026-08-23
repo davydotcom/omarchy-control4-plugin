@@ -14,7 +14,9 @@ child:
   - focused-room
   - credentials-gear
   - watch-and-listen
+  - listen-library-browse
   - room-volume-mute-off
+  - halo-panel-chrome
   - room-now-playing
 ---
 # Control4 focused-room remote
@@ -52,7 +54,9 @@ Ordered children. Sizes and depends-on are locked for this compose; `/design` re
 | 3 | `focused-room` | completed | medium | now | `director-session` | Load rooms from `ui_configuration`, persist one focus, show the name on the chip. |
 | 3b | `credentials-gear` | completed | trivial | now | `focused-room` | Hide IP/email/password once set; header gear reveals them to change login. |
 | 4 | `watch-and-listen` | delivering | medium | now | `focused-room` | One source-picker; Watch vs Listen only changes experience filter and select command. |
+| 4b | `listen-library-browse` | planning | medium | now | `watch-and-listen` | After Listen → Apple Music, pick playlists/songs (blocked on a Director list API). |
 | 5 | `room-volume-mute-off` | delivering | small | next | `focused-room` | Volume up/down, mute toggle, room off — button chrome, not a mixer. |
+| 5b | `halo-panel-chrome` | planning | small | now | `watch-and-listen` | Recolor the popup to Halo Remote tokens and layout. |
 | 6 | `room-now-playing` | planning | small | next | `focused-room` | Poll power/volume/mute/source; show on chip and panel header. |
 
 ## Sequenced work items

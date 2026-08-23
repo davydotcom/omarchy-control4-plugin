@@ -6,7 +6,24 @@
 
 # Hero Ready Queue
 
-_Generated: 2026-08-23T12:33:20Z · 3 ready specs_
+_Generated: 2026-08-23T13:47:22Z · 4 ready specs_
+
+## volume-slider-reads-room-name — Volume slider reads room name not CURRENT_VOLUME
+_bug · delivering · horizon: now_
+
+Volume slider stays 0 because parse uses `name` (room title) instead of `varName`.
+
+**Status:** delivering — parser now keys `varName`; tests include live Deck shape (`value` 32, `name` Deck).
+
+**Pick up at:** confirm the slider shows ~32 on Deck, then `hero spec verify volume-slider-reads-room-name`.
+
+→ `/deliver volume-slider-reads-room-name`
+
+**Files:** `DirectorClient.js`, `tests/director-client.test.js`
+
+**Skip:** new HTTP client; pulse buttons; now-playing chip.
+
+---
 
 ## watch-and-listen — Watch and Listen
 _feature · delivering · horizon: now_

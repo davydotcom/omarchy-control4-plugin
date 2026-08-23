@@ -11,11 +11,15 @@ vm.runInContext(src, ctx)
 const {
   parseHttp, parseAccountToken, parseControllerCommonName, parseDirectorToken,
   classifyProbe, classifyCloudStatus, commandBody, curlArgs, withAuthHeader,
+  networkErrorMessage, isTransientCurl,
   normalizeHost, credentialsComplete, statusTextFor, accountAuthBody,
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
   STATUS_SIGN_IN_FAILED, STATUS_DIRECTOR_401, STATUS_CONNECTED,
   extractRooms, isRoomHidden, parseFocusFile, sortRoomsByNameThenId,
-  extractSources, sourceArray, parseRoomVolume
+  extractSources, sourceArray, parseRoomVolume,
+  parseEngineIoSid, parseSocketIoClientId, parseMspResponse, parseMspResponses, mspArgXml,
+  parseMspTabs, parseMspList, parseMspNextScreen, isAppleMusicItem, mspPlayCommand, curlNavArgs,
+  isTuneInItem, driverXmlPath, parseTuneInTabs, parseTuneInList, tuneInTapArgs
 } = ctx
 
 function assert(cond, msg) {
@@ -82,6 +86,13 @@ assert(statusTextFor("unconfigured", "", "", true, false) === STATUS_NOT_CONNECT
 assert(statusTextFor("auth-failed", "cloud", "", true, false) === STATUS_SIGN_IN_FAILED, "sign-in failed")
 assert(statusTextFor("auth-failed", "director401", "", true, false) === STATUS_DIRECTOR_401, "director 401 copy")
 assert(statusTextFor("connected", "", "", true, true) === STATUS_CONNECTED, "connected")
+assert(statusTextFor("error", "", "Network error", true, false) === "Network error", "error lastError")
+assert(networkErrorMessage(28) === "Request timed out", "timeout message")
+assert(networkErrorMessage(7) === "Could not connect", "connect message")
+assert(networkErrorMessage(26) === "Could not read request body", "missing body message")
+assert(networkErrorMessage(15) === "Request interrupted", "sigterm message")
+assert(networkErrorMessage(56) === "Network error (56)", "other curl exit")
+assert(isTransientCurl(26) && isTransientCurl(28) && !isTransientCurl(1), "transient curl")
 
 const authBody = JSON.parse(accountAuthBody("user@example.com", "s3cret"))
 assert(authBody.clientInfo.userInfo.userName === "user@example.com", "account body email")
@@ -258,5 +269,75 @@ assert(clamped.volume === 100, "parseRoomVolume clamp")
 
 const setVol = JSON.parse(commandBody("SET_VOLUME_LEVEL", { LEVEL: 42 }))
 assert(setVol.command === "SET_VOLUME_LEVEL" && setVol.tParams.LEVEL === 42, "SET_VOLUME_LEVEL body")
+
+const sid = parseEngineIoSid('0{"sid":"abc123","upgrades":[]}')
+assert(sid === "abc123", "parseEngineIoSid")
+assert(parseSocketIoClientId('4228["clientId","ws-1"]') === "ws-1", "parseSocketIoClientId")
+const tabFrame = '42["9",[{"evtName":"OnDataToUI","iddevice":434,"data":{"RESPONSE":{"NAVID":"n","SEQ":71,"DATA":{"Tabs":{"Tab":[{"Name":"Stations","ScreenId":"ListScreen","Id":"Stations"},{"Name":"Settings","ScreenCommand":{"Name":"GetSettingsScreen"},"Id":"Settings"}]}}}}}]]'
+const tabResp = parseMspResponse(tabFrame)
+assert(tabResp && tabResp.SEQ === 71, "parseMspResponse SEQ")
+const tabs = parseMspTabs(tabResp.DATA)
+assert(tabs.length === 1 && tabs[0].title === "Stations" && tabs[0].defaultAction === "BrowseTab", "parseMspTabs skips Settings")
+const listFrame = '{"evtName":"OnDataToUI","data":{"RESPONSE":{"SEQ":201,"DATA":{"List":{"item":[{"title":"My Personal Station","itemType":"link","isLink":true,"id":"/v1/personal","default_action":"SelectItem"}]}}}}}'
+const listResp = parseMspResponse(listFrame)
+const items = parseMspList(listResp.DATA, "ListScreen", "Stations")
+assert(items.length === 1 && items[0].title === "My Personal Station" && items[0].id.indexOf("personal") !== -1, "parseMspList array")
+const one = parseMspList({ List: { item: { title: "David Estes’ Station", id: "ra.u-1", default_action: "PlayStation", itemType: "stations" } } }, "ListScreen", "Stations")
+assert(one.length === 1 && one[0].defaultAction === "PlayStation", "parseMspList single item")
+assert(mspPlayCommand({ defaultAction: "SelectItem", itemType: "library-playlists", actionsList: "PlayNow PlayShuffle" }) === "Play", "playlist tap is Play NOW")
+assert(mspPlayCommand({ defaultAction: "PlayStation", itemType: "stations" }) === "PlayStation", "station tap is PlayStation")
+assert(mspPlayCommand({ defaultAction: "SelectItem", itemType: "link", isLink: true, actionsList: "" }) === null, "folder tap is not play")
+assert(mspPlayCommand({ defaultAction: "BrowseTab", itemType: "tab" }) === null, "tab is not play")
+assert(parseMspNextScreen({ NextScreen: "ListScreen" }) === "ListScreen", "parseMspNextScreen")
+const multi = parseMspResponses('42["1",{"status":"started"}]\x1e42["1",[{"evtName":"OnDataToUI","data":{"RESPONSE":{"SEQ":5,"DATA":{"List":{"item":[]}}}}}]]')
+assert(multi.length === 1 && Number(multi[0].SEQ) === 5, "parseMspResponses skips status")
+assert(mspArgXml({ tabId: "Stations", id: "a&b" }) === "<arguments><arg name=\"tabId\">Stations</arg><arg name=\"id\">a&amp;b</arg></arguments>", "mspArgXml")
+assert(isAppleMusicItem({ protocolFilename: "apple-music.c4z", name: "Apple Music" }), "isAppleMusicItem protocol")
+assert(isAppleMusicItem({ name: "Apple Music", proxy: "media_service" }), "isAppleMusicItem proxy")
+assert(!isAppleMusicItem({ name: "ShairBridge", proxy: "media_service" }), "isAppleMusicItem not shair")
+
+// TuneIn is a legacy OS2 media service: static driver.xml tabs, GetBrowseMenu lists.
+assert(isTuneInItem({ protocolFilename: "TuneIn.c4z", name: "TuneIn" }), "isTuneInItem protocol")
+assert(isTuneInItem({ name: "TuneIn", proxy: "media_service" }), "isTuneInItem proxy")
+assert(!isTuneInItem({ protocolFilename: "apple-music.c4z", name: "Apple Music" }), "isTuneInItem not apple")
+assert(!isAppleMusicItem({ protocolFilename: "TuneIn.c4z", name: "TuneIn" }), "isAppleMusicItem not tunein")
+assert(driverXmlPath({ protocolFilename: "TuneIn.c4z" }) === "/c4z/TuneIn/driver.xml", "driverXmlPath strips c4z")
+assert(driverXmlPath({}) === "", "driverXmlPath empty")
+
+const tuneInXml = "<Tabs><Tab><Name>Browse</Name><ScreenId>Browse</ScreenId></Tab>"
+  + "<Tab><Name>My Favorites</Name><ScreenId>MyFavorites</ScreenId></Tab></Tabs>"
+const tuneInTabs = parseTuneInTabs(tuneInXml)
+assert(tuneInTabs.length === 2 && tuneInTabs[0].title === "Browse" && tuneInTabs[0].screen === "Browse",
+  "parseTuneInTabs reads static tabs")
+assert(tuneInTabs[1].isTab === true && tuneInTabs[1].screen === "MyFavorites", "parseTuneInTabs second tab")
+assert(parseTuneInTabs("<Tabs><Command><Name>GetTabList</Name></Command></Tabs>").length === 0,
+  "parseTuneInTabs ignores dynamic tab command")
+
+const tuneInFolder = parseTuneInList({ List: { item: [
+  { folder: true, type: "link", key: "local", URL: "http://opml/Browse.ashx?c=local", text: "Local Radio", default_action: "Browse" }
+] } }, "Browse")
+assert(tuneInFolder.length === 1 && tuneInFolder[0].folder === true && tuneInFolder[0].svc === "tunein",
+  "parseTuneInList folder row")
+assert(tuneInFolder[0].title === "Local Radio" && tuneInFolder[0].url === "http://opml/Browse.ashx?c=local",
+  "parseTuneInList text and URL")
+
+const tuneInStations = parseTuneInList({ List: { item: [
+  { is_header: true, text: "FM" },
+  { text: "90.1 | WFYI", subtext: "US News", type: "audio", item: "station", guide_id: "s28930",
+    URL: "http://opml/Tune.ashx?id=s28930", image: "http://logo.png", default_action: "Browse" }
+] } }, "Browse")
+assert(tuneInStations.length === 2 && tuneInStations[0].isHeader === true, "parseTuneInList keeps headers")
+assert(tuneInStations[1].folder === false && tuneInStations[1].guideId === "s28930", "parseTuneInList station row")
+assert(parseTuneInList({ List: { item: { text: "One", folder: true } } }, "Browse").length === 1,
+  "parseTuneInList single item")
+
+const tapArgs = tuneInTapArgs(tuneInStations[1])
+assert(tapArgs.screen === "Browse" && tapArgs.URL === "http://opml/Tune.ashx?id=s28930"
+  && tapArgs.guide_id === "s28930" && tapArgs.item === "station" && tapArgs.type === "audio"
+  && tapArgs.text === "90.1 | WFYI" && tapArgs.image === "http://logo.png",
+  "tuneInTapArgs mirrors driver Browse action params")
+assert(tuneInTapArgs(tuneInFolder[0]).key === "local", "tuneInTapArgs carries key")
+const navArgs = curlNavArgs({ url: "https://x/socket.io", insecure: true, maxTime: 35 })
+assert(navArgs.indexOf("-k") !== -1 && navArgs.indexOf("--max-time") !== -1, "curlNavArgs")
 
 console.log("ok")

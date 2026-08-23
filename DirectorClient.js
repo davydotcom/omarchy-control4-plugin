@@ -143,11 +143,24 @@ function classifyProbe(status) {
 }
 
 function networkErrorMessage(exitCode) {
-  if (exitCode === 28)
+  var code = Number(exitCode)
+  if (code === 28)
     return "Request timed out"
-  if (exitCode === 7)
+  if (code === 7)
     return "Could not connect"
-  return "Network error"
+  if (code === 26)
+    return "Could not read request body"
+  if (code === 15 || code === 143 || code === 130)
+    return "Request interrupted"
+  if (!isFinite(code) || code === 0)
+    return "Network error"
+  return "Network error (" + code + ")"
+}
+
+function isTransientCurl(exitCode) {
+  var code = Number(exitCode)
+  return code === 7 || code === 23 || code === 26 || code === 28
+    || code === 52 || code === 56 || code === 15 || code === 130 || code === 143
 }
 
 function statusTextFor(sessionState, authFailedKind, lastError, hasCredentials, hasToken) {
@@ -168,7 +181,7 @@ function statusTextFor(sessionState, authFailedKind, lastError, hasCredentials, 
 }
 
 function curlArgs(opts) {
-  var args = ["curl", "-sS", "--max-time", "10"]
+  var args = ["curl", "-sS", "--max-time", "20"]
   if (opts && opts.insecure)
     args.push("-k")
   args.push("-w", "\n%{http_code}")
@@ -367,4 +380,304 @@ function parseRoomVolume(raw) {
     return { volume: null, muted: false }
   }
   return { volume: volume, muted: muted }
+}
+
+function curlNavArgs(opts) {
+  var maxTime = opts && opts.maxTime != null ? String(opts.maxTime) : "35"
+  var args = ["curl", "-sS", "--max-time", maxTime]
+  if (opts && opts.insecure)
+    args.push("-k")
+  if (opts && opts.cookiePath) {
+    args.push("-b", String(opts.cookiePath))
+    args.push("-c", String(opts.cookiePath))
+  }
+  if (opts && opts.jwt)
+    args.push("-H", "JWT: " + String(opts.jwt))
+  if (opts && opts.bodyPath) {
+    args.push("-H", "Content-Type: " + String(opts.contentType || "text/plain"))
+    args.push("--data-binary", "@" + opts.bodyPath)
+  }
+  args.push(String(opts && opts.url || ""))
+  return args
+}
+
+function parseEngineIoSid(raw) {
+  var m = String(raw || "").match(/"sid":"([^"]+)"/)
+  return m ? m[1] : ""
+}
+
+function parseSocketIoClientId(raw) {
+  var m = String(raw || "").match(/"clientId","([^"]+)"/)
+  return m ? m[1] : ""
+}
+
+function extractJsonObject(s, from) {
+  var text = String(s || "")
+  var i = text.indexOf("{", from == null ? 0 : from)
+  if (i < 0)
+    return null
+  var depth = 0
+  var inStr = false
+  var esc = false
+  for (var j = i; j < text.length; j++) {
+    var ch = text.charAt(j)
+    if (inStr) {
+      if (esc)
+        esc = false
+      else if (ch === "\\")
+        esc = true
+      else if (ch === "\"")
+        inStr = false
+      continue
+    }
+    if (ch === "\"") {
+      inStr = true
+      continue
+    }
+    if (ch === "{")
+      depth++
+    else if (ch === "}") {
+      depth--
+      if (depth === 0) {
+        try {
+          return JSON.parse(text.substring(i, j + 1))
+        } catch (e) {
+          return null
+        }
+      }
+    }
+  }
+  return null
+}
+
+function parseMspResponse(raw) {
+  var all = parseMspResponses(raw)
+  return all.length ? all[all.length - 1] : null
+}
+
+function parseMspResponses(raw) {
+  var s = String(raw || "")
+  var out = []
+  var from = 0
+  while (from < s.length) {
+    var idx = s.indexOf("\"RESPONSE\"", from)
+    if (idx < 0)
+      break
+    var obj = extractJsonObject(s, idx)
+    if (obj && obj.SEQ != null)
+      out.push(obj)
+    from = idx + 10
+  }
+  return out
+}
+
+function mspArgXml(map) {
+  var keys = []
+  if (map && typeof map === "object") {
+    for (var k in map) {
+      if (Object.prototype.hasOwnProperty.call(map, k) && map[k] != null && map[k] !== "")
+        keys.push(k)
+    }
+  }
+  var parts = ["<arguments>"]
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i]
+    var val = String(map[key])
+    val = val.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    parts.push("<arg name=\"" + key + "\">" + val + "</arg>")
+  }
+  parts.push("</arguments>")
+  return parts.join("")
+}
+
+function _asArray(v) {
+  if (v == null)
+    return []
+  if (Array.isArray(v))
+    return v
+  return [v]
+}
+
+function parseMspTabs(data) {
+  var tabs = data && data.Tabs && data.Tabs.Tab
+  var list = _asArray(tabs)
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    var t = list[i]
+    if (!t || !t.Id || !t.ScreenId)
+      continue
+    out.push({
+      title: String(t.Name || t.Id),
+      id: String(t.Id),
+      itemType: "tab",
+      defaultAction: "BrowseTab",
+      isLink: true,
+      screenId: String(t.ScreenId),
+      tabId: String(t.Id)
+    })
+  }
+  return out
+}
+
+function parseMspList(data, screenId, tabId) {
+  var list = data && data.List && data.List.item
+  var rows = _asArray(list)
+  var out = []
+  var sid = screenId ? String(screenId) : "ListScreen"
+  var tid = tabId ? String(tabId) : ""
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i]
+    if (!r)
+      continue
+    var title = String(r.title || r.Name || "")
+    if (!title)
+      continue
+    out.push({
+      title: title,
+      id: r.id != null ? String(r.id) : "",
+      itemType: r.itemType != null ? String(r.itemType) : "",
+      defaultAction: String(r.default_action || r.defaultAction || "SelectItem"),
+      isLink: r.isLink === true || r.isLink === "true",
+      href: r.href != null ? String(r.href) : "",
+      actionsList: String(r.actions_list || r.actionsList || ""),
+      screenId: sid,
+      tabId: tid
+    })
+  }
+  return out
+}
+
+function parseMspNextScreen(data) {
+  if (!data || data.NextScreen == null)
+    return ""
+  return String(data.NextScreen)
+}
+
+function mspPlayCommand(row) {
+  if (!row)
+    return null
+  var action = String(row.defaultAction || row.default_action || "")
+  var kind = String(row.itemType || "")
+  var actions = String(row.actionsList || row.actions_list || "")
+  if (row.isLink === true || kind === "link" || kind === "tab" || action === "BrowseTab")
+    return null
+  if (action === "PlayStation" || kind === "stations")
+    return "PlayStation"
+  if (action === "Play" || action === "PlayNow")
+    return "Play"
+  if (actions.indexOf("PlayNow") !== -1)
+    return "Play"
+  if (kind.indexOf("playlist") !== -1 || kind.indexOf("song") !== -1 || kind.indexOf("album") !== -1)
+    return "Play"
+  return null
+}
+
+function isAppleMusicItem(item) {
+  if (!item)
+    return false
+  var fn = String(item.protocolFilename || item.filename || "")
+  if (fn.indexOf("apple-music") !== -1)
+    return true
+  if (String(item.name || "") === "Apple Music" && String(item.proxy || "") === "media_service")
+    return true
+  return false
+}
+
+function isTuneInItem(item) {
+  if (!item)
+    return false
+  var fn = String(item.protocolFilename || item.filename || "")
+  if (fn.toLowerCase().indexOf("tunein") !== -1)
+    return true
+  if (String(item.name || "") === "TuneIn" && String(item.proxy || "") === "media_service")
+    return true
+  return false
+}
+
+function driverXmlPath(item) {
+  var fn = String(item && (item.protocolFilename || item.filename) || "")
+  fn = fn.replace(/\.c4[zi]$/i, "")
+  if (!fn)
+    return ""
+  return "/c4z/" + fn + "/driver.xml"
+}
+
+// TuneIn is a legacy OS2 media service: its tabs are static in driver.xml
+// rather than answered by a GetTabList protocol command.
+function parseTuneInTabs(xml) {
+  var block = String(xml || "").match(/<Tabs>([\s\S]*?)<\/Tabs>/)
+  if (!block)
+    return []
+  var out = []
+  var re = /<Tab>([\s\S]*?)<\/Tab>/g
+  var m
+  while ((m = re.exec(block[1])) !== null) {
+    var name = m[1].match(/<Name>([\s\S]*?)<\/Name>/)
+    var screen = m[1].match(/<ScreenId>([\s\S]*?)<\/ScreenId>/)
+    if (!name || !screen)
+      continue
+    out.push({
+      svc: "tunein",
+      title: name[1],
+      screen: screen[1],
+      isTab: true,
+      folder: true
+    })
+  }
+  return out
+}
+
+function parseTuneInList(data, screen) {
+  var rows = _asArray(data && data.List && data.List.item)
+  var sid = screen ? String(screen) : "Browse"
+  var out = []
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i]
+    if (!r)
+      continue
+    var title = String(r.text || r.title || "")
+    if (!title)
+      continue
+    out.push({
+      svc: "tunein",
+      title: title,
+      subtitle: r.subtext != null ? String(r.subtext) : "",
+      screen: sid,
+      folder: r.folder === true || r.folder === "true",
+      isHeader: r.is_header === true || r.is_header === "true",
+      url: r.URL != null ? String(r.URL) : "",
+      type: r.type != null ? String(r.type) : "",
+      key: r.key != null ? String(r.key) : "",
+      itemProp: r.item != null ? String(r.item) : "",
+      guideId: r.guide_id != null ? String(r.guide_id) : "",
+      isPreset: r.is_preset != null ? String(r.is_preset) : "",
+      image: r.image != null ? String(r.image) : ""
+    })
+  }
+  return out
+}
+
+// Mirrors the driver's Browse action params: screen, type, URL, guide_id,
+// item, is_preset, key, text, image.
+function tuneInTapArgs(row) {
+  if (!row)
+    return {}
+  var args = { screen: row.screen || "Browse" }
+  if (row.type)
+    args.type = row.type
+  if (row.url)
+    args.URL = row.url
+  if (row.guideId)
+    args.guide_id = row.guideId
+  if (row.itemProp)
+    args.item = row.itemProp
+  if (row.isPreset)
+    args.is_preset = row.isPreset
+  if (row.key)
+    args.key = row.key
+  if (row.title)
+    args.text = row.title
+  if (row.image)
+    args.image = row.image
+  return args
 }

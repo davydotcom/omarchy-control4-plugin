@@ -28,8 +28,29 @@ Panel {
     && session.focusedRoomId !== undefined
   readonly property string sourcesHint: session ? String(session.sourcesHint || "") : ""
   readonly property string sourceMode: session && session.sourceMode ? String(session.sourceMode) : "watch"
+  readonly property color panelFg: Color.popups.text
 
   property bool settingsOpen: false
+
+  function rowName(list, index) {
+    if (!list || index < 0 || index >= list.length)
+      return ""
+    var row = list[index]
+    if (!row)
+      return ""
+    if (row.name !== undefined && row.name !== null && String(row.name).length)
+      return String(row.name)
+    if (row.id !== undefined && row.id !== null)
+      return String(row.id)
+    return ""
+  }
+
+  function rowId(list, index) {
+    if (!list || index < 0 || index >= list.length)
+      return null
+    var row = list[index]
+    return row && row.id !== undefined ? row.id : null
+  }
 
   function resolveSession() {
     var sh = root.bar && root.bar.shell
@@ -113,10 +134,20 @@ Panel {
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
-      Column {
-        id: content
-        width: parent.width
-        spacing: Style.space(8)
+      Flickable {
+        id: panelFlick
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: content.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.VerticalFlick
+        interactive: contentHeight > height
+
+        Column {
+          id: content
+          width: panelFlick.width
+          spacing: Style.space(8)
 
         Row {
           id: headerRow
@@ -130,7 +161,7 @@ Panel {
             height: implicitHeight
             anchors.verticalCenter: parent.verticalCenter
             text: "Control4"
-            color: root.barForeground
+            color: root.panelFg
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.subtitle
             font.bold: true
@@ -145,7 +176,7 @@ Panel {
             anchors.verticalCenter: parent.verticalCenter
             iconText: "󰒓"
             tooltipText: root.settingsOpen ? "Hide login" : "Change login"
-            foreground: root.barForeground
+            foreground: root.panelFg
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
             bordered: root.settingsOpen
             onClicked: root.settingsOpen = !root.settingsOpen
@@ -155,7 +186,7 @@ Panel {
         Text {
           width: parent.width
           text: root.sessionStatus
-          color: root.barForeground
+          color: root.panelFg
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.font.body
           wrapMode: Text.WordWrap
@@ -173,7 +204,7 @@ Panel {
             width: parent.width
             enabled: !root.connecting
             placeholderText: "Controller IP"
-            foreground: root.barForeground
+            foreground: root.panelFg
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             Keys.onReturnPressed: root.submitConnect()
             Keys.onEnterPressed: root.submitConnect()
@@ -184,7 +215,7 @@ Panel {
             width: parent.width
             enabled: !root.connecting
             placeholderText: "Email"
-            foreground: root.barForeground
+            foreground: root.panelFg
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             Keys.onReturnPressed: root.submitConnect()
             Keys.onEnterPressed: root.submitConnect()
@@ -196,7 +227,7 @@ Panel {
             enabled: !root.connecting
             placeholderText: "Password"
             password: true
-            foreground: root.barForeground
+            foreground: root.panelFg
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             Keys.onReturnPressed: root.submitConnect()
             Keys.onEnterPressed: root.submitConnect()
@@ -204,7 +235,7 @@ Panel {
 
           Button {
             text: "Connect"
-            foreground: root.barForeground
+            foreground: root.panelFg
             bordered: true
             enabled: !root.connecting
             onClicked: root.submitConnect()
@@ -215,7 +246,7 @@ Panel {
           visible: root.connected && root.roomsHint !== ""
           width: parent.width
           text: root.roomsHint
-          color: root.barForeground
+          color: root.panelFg
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.font.body
           wrapMode: Text.WordWrap
@@ -228,36 +259,45 @@ Panel {
           spacing: Style.space(4)
 
           Repeater {
-            model: root.session && root.session.rooms ? root.session.rooms : []
+            model: root.session && root.session.rooms ? root.session.rooms.length : 0
 
             Button {
               width: roomsColumn.width
-              text: modelData && modelData.name ? String(modelData.name) : ""
+              text: root.rowName(root.session.rooms, index)
               selected: root.session
                 && root.session.focusedRoomId !== null
-                && root.session.focusedRoomId !== undefined
-                && Number(root.session.focusedRoomId) === Number(modelData.id)
-              foreground: root.barForeground
+                && Number(root.session.focusedRoomId) === Number(root.rowId(root.session.rooms, index))
+              foreground: root.panelFg
               leftAlign: true
-              onClicked: if (root.session) root.session.setFocusedRoom(modelData.id)
+              bordered: true
+              onClicked: if (root.session) root.session.setFocusedRoom(root.rowId(root.session.rooms, index))
             }
           }
         }
 
-        ButtonGroup {
+        Row {
+          id: modeRow
           visible: root.hasFocusedRoom
           width: parent.width
-          height: visible ? implicitHeight : 0
-          options: [
-            { value: "watch", label: "Watch" },
-            { value: "listen", label: "Listen" }
-          ]
-          value: root.sourceMode
-          foreground: root.barForeground
-          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-          onChanged: function(v) {
-            if (root.session)
-              root.session.setSourceMode(v)
+          spacing: Style.space(8)
+          height: root.hasFocusedRoom ? implicitHeight : 0
+
+          Button {
+            width: (modeRow.width - modeRow.spacing) / 2
+            text: "Watch"
+            selected: root.sourceMode === "watch"
+            bordered: true
+            foreground: root.panelFg
+            onClicked: if (root.session) root.session.setSourceMode("watch")
+          }
+
+          Button {
+            width: (modeRow.width - modeRow.spacing) / 2
+            text: "Listen"
+            selected: root.sourceMode === "listen"
+            bordered: true
+            foreground: root.panelFg
+            onClicked: if (root.session) root.session.setSourceMode("listen")
           }
         }
 
@@ -266,7 +306,7 @@ Panel {
           width: parent.width
           height: visible ? implicitHeight : 0
           text: root.sourcesHint
-          color: root.barForeground
+          color: root.panelFg
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.font.body
           wrapMode: Text.WordWrap
@@ -280,14 +320,15 @@ Panel {
           height: visible ? implicitHeight : 0
 
           Repeater {
-            model: root.session && root.session.sources ? root.session.sources : []
+            model: root.session && root.session.sources ? root.session.sources.length : 0
 
             Button {
               width: sourcesColumn.width
-              text: modelData && modelData.name ? String(modelData.name) : ""
-              foreground: root.barForeground
+              text: root.rowName(root.session.sources, index)
+              foreground: root.panelFg
               leftAlign: true
-              onClicked: if (root.session) root.session.selectSource(modelData.id)
+              bordered: true
+              onClicked: if (root.session) root.session.selectSource(root.rowId(root.session.sources, index))
             }
           }
         }
@@ -304,7 +345,7 @@ Panel {
             width: Style.space(36)
             anchors.verticalCenter: parent.verticalCenter
             text: root.session && root.session.muted ? "M" : String(root.session ? root.session.volume : 0)
-            color: root.barForeground
+            color: root.panelFg
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.body
             horizontalAlignment: Text.AlignRight
@@ -334,9 +375,10 @@ Panel {
           width: parent.width
           height: visible ? implicitHeight : 0
           text: "Off"
-          foreground: root.barForeground
+          foreground: root.panelFg
           bordered: true
           onClicked: if (root.session) root.session.roomOff()
+        }
         }
       }
     }

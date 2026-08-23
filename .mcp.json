@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "hero": {
+      "command": "/usr/local/bin/hero",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

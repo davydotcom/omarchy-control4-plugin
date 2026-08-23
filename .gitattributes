@@ -1,0 +1,6 @@
+# >>> hero next merge driver (managed) >>>
+.hero/NEXT.md merge=union
+.hero/next/*.md merge=union
+.hero/SNAPSHOT.md merge=union
+.hero/QUEUE.md merge=union
+# <<< hero next merge driver (managed) <<<

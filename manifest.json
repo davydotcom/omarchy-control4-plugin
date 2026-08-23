@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.davydotcom.control4",
+  "name": "Control4",
+  "version": "0.1.0",
+  "author": "David Estes",
+  "license": "MIT",
+  "description": "Control4 focused-room remote for the Omarchy bar.",
+  "keepLoaded": true,
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Control4",
+    "category": "Home",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

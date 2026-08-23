@@ -57,6 +57,8 @@ Item {
   property var _items: null
   property int volume: 0
   property bool muted: false
+  // null until the Director reports POWER_STATE — off and unknown must stay distinct.
+  property var roomOn: null
   property var _volumeHoldUntil: 0
   property int _volumeGen: 0
 
@@ -205,6 +207,7 @@ Item {
       return
     focusedRoomId = match.id
     focusedRoomName = match.name
+    roomOn = null
     roomsHint = ""
     persistFocus(match.id)
     selectedSourceId = null
@@ -710,13 +713,14 @@ Item {
   function refreshVolume() {
     if (sessionState !== "connected" || focusedRoomId === null || focusedRoomId === undefined) {
       volumeTimer.stop()
+      roomOn = null
       return
     }
     volumeTimer.restart()
     root._volumeGen += 1
     var gen = root._volumeGen
     var id = focusedRoomId
-    directorGet("/api/v1/items/" + id + "/variables?varnames=CURRENT_VOLUME,IS_MUTED", function(err, body) {
+    directorGet("/api/v1/items/" + id + "/variables?varnames=CURRENT_VOLUME,IS_MUTED,POWER_STATE", function(err, body) {
       if (gen !== root._volumeGen)
         return
       if (err)
@@ -727,6 +731,7 @@ Item {
       if (parsed.volume !== null)
         root.volume = parsed.volume
       root.muted = parsed.muted === true
+      root.roomOn = parsed.power
     })
   }
 

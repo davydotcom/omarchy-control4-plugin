@@ -357,10 +357,13 @@ function extractSources(uiConfig, items, roomId, mode) {
 function parseRoomVolume(raw) {
   var volume = null
   var muted = false
+  // null means "not reported", which is not the same as off — the chip has to
+  // tell room-off apart from not-connected.
+  var power = null
   try {
     var list = JSON.parse(String(raw || ""))
     if (!Array.isArray(list))
-      return { volume: null, muted: false }
+      return { volume: null, muted: false, power: null }
     for (var i = 0; i < list.length; i++) {
       var row = list[i]
       if (!row)
@@ -375,11 +378,15 @@ function parseRoomVolume(raw) {
         var v = row.value
         muted = v === true || v === "true" || v === "1" || v === 1
       }
+      if (key === "POWER_STATE") {
+        var p = row.value
+        power = !(p === 0 || p === "0" || p === false || p === "false")
+      }
     }
   } catch (e) {
-    return { volume: null, muted: false }
+    return { volume: null, muted: false, power: null }
   }
-  return { volume: volume, muted: muted }
+  return { volume: volume, muted: muted, power: power }
 }
 
 function curlNavArgs(opts) {
@@ -496,6 +503,133 @@ function _asArray(v) {
   if (Array.isArray(v))
     return v
   return [v]
+}
+
+function _truthyFlag(v) {
+  return v === true || v === "true" || v === "1" || v === 1
+}
+
+function _commandName(entry) {
+  if (typeof entry === "string") {
+    var s = entry.trim()
+    return s ? s.toUpperCase() : ""
+  }
+  if (!entry || typeof entry !== "object")
+    return ""
+  var keys = ["name", "command", "id"]
+  for (var i = 0; i < keys.length; i++) {
+    if (entry[keys[i]] == null)
+      continue
+    var t = String(entry[keys[i]]).trim()
+    if (t)
+      return t.toUpperCase()
+  }
+  return ""
+}
+
+function _emptyRemoteCapabilities() {
+  return {
+    commands: [],
+    hasNavigation: false,
+    nav: { menu: false, up: false, down: false, left: false, right: false, enter: false },
+    hasTransport: false,
+    transport: {
+      play: false, stop: false, pause: false,
+      skipFwd: false, skipRev: false, scanFwd: false, scanRev: false
+    },
+    hasDigits: false,
+    hasChannelUpDown: false,
+    hasDiscreteChannelSelect: false,
+    power: { on: false, off: false },
+    showTransport: null,
+    displayIcon: "",
+    displayIcons: []
+  }
+}
+
+var _NAV_KEYS = { MENU: "menu", UP: "up", DOWN: "down", LEFT: "left", RIGHT: "right", ENTER: "enter" }
+var _TRANSPORT_KEYS = {
+  PLAY: "play", STOP: "stop", PAUSE: "pause",
+  SKIP_FWD: "skipFwd", SKIP_REV: "skipRev", SCAN_FWD: "scanFwd", SCAN_REV: "scanRev"
+}
+
+function parseRemoteCapabilities(item) {
+  var caps = _emptyRemoteCapabilities()
+  if (!item || typeof item !== "object")
+    return caps
+  var list = _asArray(item.commands && item.commands.command)
+  var seen = {}
+  for (var i = 0; i < list.length; i++) {
+    var name = _commandName(list[i])
+    if (!name || seen[name])
+      continue
+    seen[name] = true
+    caps.commands.push(name)
+    if (_NAV_KEYS[name]) {
+      caps.nav[_NAV_KEYS[name]] = true
+      caps.hasNavigation = true
+    }
+    if (_TRANSPORT_KEYS[name]) {
+      caps.transport[_TRANSPORT_KEYS[name]] = true
+      caps.hasTransport = true
+    }
+    if (name.indexOf("NUMBER_") === 0 && name.length === 8) {
+      var digit = name.charAt(7)
+      if (digit >= "0" && digit <= "9")
+        caps.hasDigits = true
+    }
+    if (name === "ON")
+      caps.power.on = true
+    if (name === "OFF")
+      caps.power.off = true
+  }
+  var capab = item.capabilities
+  if (capab && typeof capab === "object") {
+    caps.hasChannelUpDown = _truthyFlag(capab.has_channel_up_down)
+    caps.hasDiscreteChannelSelect = _truthyFlag(capab.has_discrete_channel_select)
+    var opt = capab.navigator_display_option
+    if (opt && typeof opt === "object") {
+      if (opt.show_transport !== undefined) {
+        if (_truthyFlag(opt.show_transport))
+          caps.showTransport = true
+        else if (opt.show_transport === false || opt.show_transport === "false"
+            || opt.show_transport === 0 || opt.show_transport === "0")
+          caps.showTransport = false
+      }
+      if (opt.display_icon != null) {
+        var icon = String(opt.display_icon).trim()
+        if (icon)
+          caps.displayIcon = icon
+      }
+      var icons = _asArray(opt.display_icons)
+      for (var j = 0; j < icons.length; j++) {
+        var ic = icons[j]
+        if (typeof ic === "string" && ic.trim()) {
+          caps.displayIcons.push(ic.trim())
+          continue
+        }
+        if (ic && typeof ic === "object" && ic.url != null) {
+          var url = String(ic.url).trim()
+          if (url)
+            caps.displayIcons.push(url)
+        }
+      }
+    }
+  }
+  return caps
+}
+
+function hasRemoteCommand(caps, name) {
+  if (!caps || !Array.isArray(caps.commands) || name == null)
+    return false
+  var want = String(name).trim().toUpperCase()
+  if (!want)
+    return false
+  for (var k = 0; k < caps.commands.length; k++) {
+    if (caps.commands[k] === want)
+      return true
+  }
+  return false
 }
 
 function parseMspTabs(data) {

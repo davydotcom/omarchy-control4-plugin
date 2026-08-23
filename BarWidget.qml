@@ -12,10 +12,21 @@ BarWidget {
   readonly property bool hasFocusedRoom: session
     && session.sessionState === "connected"
     && String(session.focusedRoomName || "").length > 0
-  readonly property string chipText: hasFocusedRoom ? String(session.focusedRoomName) : "C4"
+  // The room name is in the tooltip, not the chip: spelling it across the bar
+  // cost a lot of width and still never said "Control4". The mark is the
+  // identity; colour carries the room's power state.
+  readonly property bool roomOn: hasFocusedRoom && session.roomOn === true
+  readonly property color chipOnColor: "#E4322B"
   readonly property string chipTooltip: {
-    if (hasFocusedRoom)
-      return chipText + (sessionStatus !== "" ? (" — " + sessionStatus) : "")
+    if (hasFocusedRoom) {
+      var state = session.roomOn === true ? "On" : (session.roomOn === false ? "Off" : "")
+      var parts = String(session.focusedRoomName)
+      if (state !== "")
+        parts += " — " + state
+      if (sessionStatus !== "")
+        parts += " · " + sessionStatus
+      return "Control4 · " + parts
+    }
     return sessionStatus !== "" ? ("Control4 — " + sessionStatus) : "Control4"
   }
 
@@ -97,35 +108,42 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.chipText
+    text: "Control4"
     labelVisible: false
     tooltipText: root.chipTooltip
     fixedWidth: root.vertical ? -1 : Math.max(12, chipClip.width + button.scaledHorizontalMargin * 2)
 
+    // Control4's mark is a numeral in a rounded square. Drawn rather than
+    // shipped as an asset so it scales with the bar and recolours for state.
     Item {
       id: chipClip
       enabled: false
       anchors.centerIn: parent
-      width: {
-        var cap = Style.space(140)
-        if (root.vertical && parent.width > 0)
-          cap = Math.min(cap, parent.width)
-        return Math.min(cap, chipLabel.implicitWidth)
-      }
-      height: chipLabel.implicitHeight
-      clip: true
+      width: badge.width
+      height: badge.height
 
-      Text {
-        id: chipLabel
-        width: parent.width
-        text: root.chipText
-        elide: Text.ElideRight
-        color: button.foreground
-        font.family: button.fontFamily
-        font.pixelSize: button.fontSize
-        renderType: Text.NativeRendering
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
+      Rectangle {
+        id: badge
+        width: Math.round(chipGlyph.implicitHeight * 1.45)
+        height: width
+        radius: Math.max(2, Math.round(width * 0.24))
+        // Filled when the room is on, hollow otherwise — readable as state
+        // even where the accent colour is hard to judge against a wallpaper.
+        color: root.roomOn ? root.chipOnColor : "transparent"
+        border.color: root.roomOn ? root.chipOnColor : button.foreground
+        border.width: 1
+        opacity: root.hasFocusedRoom ? 1.0 : 0.55
+
+        Text {
+          id: chipGlyph
+          anchors.centerIn: parent
+          text: "4"
+          color: root.roomOn ? "#FFFFFF" : button.foreground
+          font.family: button.fontFamily
+          font.pixelSize: button.fontSize
+          font.bold: true
+          renderType: Text.NativeRendering
+        }
       }
     }
 

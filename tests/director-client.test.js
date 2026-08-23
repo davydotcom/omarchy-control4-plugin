@@ -16,7 +16,7 @@ const {
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
   STATUS_SIGN_IN_FAILED, STATUS_DIRECTOR_401, STATUS_CONNECTED,
   extractRooms, isRoomHidden, parseFocusFile, sortRoomsByNameThenId,
-  extractSources, sourceArray, parseRoomVolume,
+  extractSources, sourceArray, parseRoomVolume, parseRemoteCapabilities, hasRemoteCommand,
   parseEngineIoSid, parseSocketIoClientId, parseMspResponse, parseMspResponses, mspArgXml,
   parseMspTabs, parseMspList, parseMspNextScreen, isAppleMusicItem, mspPlayCommand, curlNavArgs,
   isTuneInItem, driverXmlPath, parseTuneInTabs, parseTuneInList, tuneInTapArgs
@@ -296,6 +296,21 @@ assert(isAppleMusicItem({ protocolFilename: "apple-music.c4z", name: "Apple Musi
 assert(isAppleMusicItem({ name: "Apple Music", proxy: "media_service" }), "isAppleMusicItem proxy")
 assert(!isAppleMusicItem({ name: "ShairBridge", proxy: "media_service" }), "isAppleMusicItem not shair")
 
+// POWER_STATE drives the bar chip. null (not reported) must stay distinct from
+// false (room off), or the chip cannot tell "off" from "not connected yet".
+const powerOff = parseRoomVolume(JSON.stringify([
+  { id: 14, varName: "POWER_STATE", value: 0 },
+  { id: 14, varName: "CURRENT_VOLUME", value: 30 }
+]))
+assert(powerOff.power === false && powerOff.volume === 30, "parseRoomVolume POWER_STATE 0 is off")
+const powerOn = parseRoomVolume(JSON.stringify([{ id: 14, varName: "POWER_STATE", value: 1 }]))
+assert(powerOn.power === true, "parseRoomVolume POWER_STATE 1 is on")
+assert(parseRoomVolume(JSON.stringify([{ varName: "POWER_STATE", value: "0" }])).power === false,
+  "parseRoomVolume POWER_STATE string zero is off")
+assert(parseRoomVolume(JSON.stringify([{ varName: "CURRENT_VOLUME", value: 30 }])).power === null,
+  "parseRoomVolume absent POWER_STATE is null, not false")
+assert(parseRoomVolume("not json").power === null, "parseRoomVolume bad body reports null power")
+
 // TuneIn is a legacy OS2 media service: static driver.xml tabs, GetBrowseMenu lists.
 assert(isTuneInItem({ protocolFilename: "TuneIn.c4z", name: "TuneIn" }), "isTuneInItem protocol")
 assert(isTuneInItem({ name: "TuneIn", proxy: "media_service" }), "isTuneInItem proxy")
@@ -339,5 +354,59 @@ assert(tapArgs.screen === "Browse" && tapArgs.URL === "http://opml/Tune.ashx?id=
 assert(tuneInTapArgs(tuneInFolder[0]).key === "local", "tuneInTapArgs carries key")
 const navArgs = curlNavArgs({ url: "https://x/socket.io", insecure: true, maxTime: 35 })
 assert(navArgs.indexOf("-k") !== -1 && navArgs.indexOf("--max-time") !== -1, "curlNavArgs")
+
+const NAV = ["MENU", "UP", "DOWN", "LEFT", "RIGHT", "ENTER"]
+const TRANSPORT = ["PLAY", "STOP", "PAUSE", "SKIP_FWD", "SKIP_REV", "SCAN_FWD", "SCAN_REV"]
+const DIGITS = ["NUMBER_0", "NUMBER_1", "NUMBER_2", "NUMBER_3", "NUMBER_4",
+  "NUMBER_5", "NUMBER_6", "NUMBER_7", "NUMBER_8", "NUMBER_9"]
+const dvdItem = {
+  id: 295, name: "Office Apple Tv", proxy: "dvd",
+  commands: { command: NAV.concat(TRANSPORT, DIGITS, ["STAR", "POUND", "DASH", "ON", "OFF"]) },
+  capabilities: {
+    navigator_display_option: {
+      type: "dvd", show_transport: true, display_icon: "controller://driver/dvd.png"
+    }
+  }
+}
+const dvdCaps = parseRemoteCapabilities(dvdItem)
+assert(dvdCaps.hasNavigation && dvdCaps.nav.up && dvdCaps.nav.menu && dvdCaps.nav.enter, "dvd nav")
+assert(dvdCaps.hasTransport && dvdCaps.transport.play && dvdCaps.transport.skipFwd, "dvd transport")
+assert(dvdCaps.hasDigits && !dvdCaps.hasChannelUpDown && !dvdCaps.hasDiscreteChannelSelect, "dvd digits not channel")
+assert(dvdCaps.power.on && dvdCaps.power.off, "dvd power")
+assert(dvdCaps.showTransport === true && dvdCaps.displayIcon === "controller://driver/dvd.png", "dvd display")
+assert(hasRemoteCommand(dvdCaps, "up") && hasRemoteCommand(dvdCaps, "MENU"), "hasRemoteCommand")
+
+const c4zItem = {
+  id: 431, name: "Base Fam Apple TV", proxy: "media_player",
+  commands: { command: NAV.concat(TRANSPORT, DIGITS, ["ON", "OFF"]) },
+  capabilities: {
+    navigator_display_option: {
+      proxybindingid: 5001, type: "media_player",
+      translation_url: "controller://driver/appleTV/tr",
+      display_icons: ["controller://driver/appleTV/icon.png"]
+    }
+  }
+}
+const c4zCaps = parseRemoteCapabilities(c4zItem)
+assert(c4zCaps.hasNavigation && c4zCaps.hasTransport && c4zCaps.hasDigits, "c4z commands")
+assert(c4zCaps.showTransport === null, "c4z missing show_transport is not false")
+assert(c4zCaps.displayIcons.join(",") === "controller://driver/appleTV/icon.png", "c4z display_icons")
+
+const cableItem = {
+  id: 20, name: "Cable DVR", proxy: "cable",
+  commands: { command: DIGITS.concat(["CHANNEL_UP", "CHANNEL_DOWN"]) },
+  capabilities: { has_channel_up_down: true, has_discrete_channel_select: "1" }
+}
+const cableCaps = parseRemoteCapabilities(cableItem)
+assert(cableCaps.hasDigits && cableCaps.hasChannelUpDown && cableCaps.hasDiscreteChannelSelect, "cable channel flags")
+assert(!cableCaps.hasNavigation && !cableCaps.hasTransport, "cable no nav/transport")
+
+assert(parseRemoteCapabilities(null).hasNavigation === false, "null item")
+assert(parseRemoteCapabilities({}).commands.length === 0, "no commands")
+assert(parseRemoteCapabilities({ name: "Apple TV", model: "Apple TV", manufacturer: "Apple" }).hasNavigation === false,
+  "name is not a gate")
+
+const single = parseRemoteCapabilities({ commands: { command: { name: "UP" } } })
+assert(single.commands.length === 1 && single.nav.up === true && single.hasNavigation, "single object command")
 
 console.log("ok")

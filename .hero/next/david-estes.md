@@ -1,6 +1,6 @@
 ---
 user: david-estes
-updated: 2026-08-23T19:36:16Z
+updated: 2026-08-23T19:36:38Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
@@ -14,7 +14,7 @@ _possibly stale — 4 commit(s) since, last set 5h 23m ago_
 
 ## Last user ask
 
-> ok we got a lot farther using grok on this. lets keep it going apple music browsing works now, awesome. but Tune In doesnt yet for grabbing radio stations, can you do that one next on listen to audio source
+> do it
 
 ## Suggested next prompt
 

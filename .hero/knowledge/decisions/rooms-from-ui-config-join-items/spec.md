@@ -10,6 +10,8 @@ relates-to:
   - focused-room
   - control4-focused-room-remote
   - director-session
+  - room-environment
+  - experience-switch
 ---
 # Rooms from ui_configuration joined to items
 

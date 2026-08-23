@@ -31,6 +31,28 @@ Item {
   property var sources: []
   property string sourcesHint: ""
   property var selectedSourceId: null
+  property bool remoteOpen: false
+  property string remoteTitle: ""
+  property var remoteDeviceId: null
+  property bool remoteMenu: false
+  property bool remoteUp: false
+  property bool remoteDown: false
+  property bool remoteLeft: false
+  property bool remoteRight: false
+  property bool remoteEnter: false
+  property bool remotePlay: false
+  property bool remoteStop: false
+  property bool remotePause: false
+  property bool remoteSkipFwd: false
+  property bool remoteSkipRev: false
+  property bool remoteScanFwd: false
+  property bool remoteScanRev: false
+  property bool remoteChannelUp: false
+  property bool remoteChannelDown: false
+  property bool remoteNumberPad: false
+  property bool remoteStar: false
+  property bool remotePound: false
+  property var remoteSurroundModes: []
   property bool browseOpen: false
   property bool browseBusy: false
   property string browseTitle: ""
@@ -59,6 +81,11 @@ Item {
   property bool muted: false
   // null until the Director reports POWER_STATE — off and unknown must stay distinct.
   property var roomOn: null
+  property string playingSourceName: ""
+  property var currentVideoDeviceId: null
+  property var playingAudioDeviceId: null
+  property string lastDeviceGroup: ""
+  property bool _wantSourceRestore: false
   property var _volumeHoldUntil: 0
   property int _volumeGen: 0
 
@@ -119,6 +146,8 @@ Item {
     sourcesHint = ""
     volume = 0
     muted = false
+    roomOn = null
+    playingSourceName = ""
     volumeTimer.stop()
     _setState("unconfigured")
   }
@@ -136,6 +165,7 @@ Item {
       chmodBodyProc.running = false
     _stopNav()
     closeBrowse()
+    closeRemote()
   }
 
   function _startAccountAuth() {
@@ -208,10 +238,13 @@ Item {
     focusedRoomId = match.id
     focusedRoomName = match.name
     roomOn = null
+    playingSourceName = ""
     roomsHint = ""
     persistFocus(match.id)
     selectedSourceId = null
     closeBrowse()
+    closeRemote()
+    _wantSourceRestore = true
     _rebuildSources(true)
     refreshVolume()
   }
@@ -224,6 +257,7 @@ Item {
     sourceMode = mode
     selectedSourceId = null
     closeBrowse()
+    closeRemote()
     _rebuildSources(false)
   }
 
@@ -245,15 +279,94 @@ Item {
     }
     if (!found)
       return
-    var command = sourceMode === "listen" ? "SELECT_AUDIO_DEVICE" : "SELECT_VIDEO_DEVICE"
+    var already = _alreadyCurrentSource(n)
     selectedSourceId = n
-    directorPost("/api/v1/items/" + focusedRoomId + "/commands", command, { deviceid: n }, function() {})
+    if (!already) {
+      var command = sourceMode === "listen" ? "SELECT_AUDIO_DEVICE" : "SELECT_VIDEO_DEVICE"
+      directorPost("/api/v1/items/" + focusedRoomId + "/commands", command, { deviceid: n }, function() {})
+      roomOn = true
+      lastDeviceGroup = sourceMode
+      var picked = ""
+      if (list && list.length) {
+        for (var j = 0; j < list.length; j++) {
+          if (list[j] && Number(list[j].id) === n && list[j].name)
+            picked = String(list[j].name)
+        }
+      }
+      playingSourceName = picked
+    }
+    if (sourceMode === "watch") {
+      closeBrowse()
+      var watchItem = DirectorClient.itemForWatchRemote(_items, n)
+      if (DirectorClient.hasWatchRemoteUi(DirectorClient.parseRemoteCapabilities(watchItem)))
+        openWatchRemote(n)
+      else
+        closeRemote()
+      return
+    }
+    closeRemote()
     var svc = _mspServiceOf(n)
     if (svc) {
       _browseTries = 0
       openMspBrowse(n, svc)
     } else
       closeBrowse()
+  }
+
+  function _alreadyCurrentSource(n) {
+    if (sourceMode === "listen")
+      return playingAudioDeviceId != null && Number(playingAudioDeviceId) === Number(n)
+    var matched = DirectorClient.matchWatchSourceId(sources, _items, currentVideoDeviceId)
+    if (matched != null && Number(matched) === Number(n))
+      return true
+    return currentVideoDeviceId != null && Number(currentVideoDeviceId) === Number(n)
+  }
+
+  function restoreActiveSource() {
+    if (sessionState !== "connected" || focusedRoomId === null || focusedRoomId === undefined)
+      return
+    var watchList = DirectorClient.extractSources(_uiConfig, _items, focusedRoomId, "watch")
+    var watchId = DirectorClient.matchWatchSourceId(watchList, _items, currentVideoDeviceId)
+    if (watchId != null) {
+      if (sourceMode !== "watch") {
+        sourceMode = "watch"
+        _rebuildSources(false)
+      }
+      selectedSourceId = watchId
+      closeBrowse()
+      if (roomOn === false) {
+        closeRemote()
+        return
+      }
+      var watchItem = DirectorClient.itemForWatchRemote(_items, watchId)
+      if (DirectorClient.hasWatchRemoteUi(DirectorClient.parseRemoteCapabilities(watchItem)))
+        openWatchRemote(watchId)
+      else
+        closeRemote()
+      return
+    }
+    if (String(lastDeviceGroup) !== "listen" || playingAudioDeviceId == null)
+      return
+    var listenList = DirectorClient.extractSources(_uiConfig, _items, focusedRoomId, "listen")
+    var audioId = Number(playingAudioDeviceId)
+    var found = false
+    if (listenList && listenList.length) {
+      for (var i = 0; i < listenList.length; i++) {
+        if (listenList[i] && Number(listenList[i].id) === audioId) {
+          found = true
+          break
+        }
+      }
+    }
+    if (!found)
+      return
+    if (sourceMode !== "listen") {
+      sourceMode = "listen"
+      _rebuildSources(false)
+    }
+    selectedSourceId = audioId
+    closeRemote()
+    closeBrowse()
   }
 
   function _itemById(id) {
@@ -327,6 +440,86 @@ Item {
       root.browseBusy = false
       root.browseHint = ""
     })
+  }
+
+  function _applyRemoteCaps(caps) {
+    var nav = caps && caps.nav ? caps.nav : {}
+    remoteMenu = !!nav.menu
+    remoteUp = !!nav.up
+    remoteDown = !!nav.down
+    remoteLeft = !!nav.left
+    remoteRight = !!nav.right
+    remoteEnter = !!nav.enter
+    var tr = caps && caps.transport ? caps.transport : {}
+    remotePlay = !!tr.play
+    remoteStop = !!tr.stop
+    remotePause = !!tr.pause
+    remoteSkipFwd = !!tr.skipFwd
+    remoteSkipRev = !!tr.skipRev
+    remoteScanFwd = !!tr.scanFwd
+    remoteScanRev = !!tr.scanRev
+    remoteChannelUp = !!(caps && caps.hasChannelUpDown && DirectorClient.hasRemoteCommand(caps, "CHANNEL_UP"))
+    remoteChannelDown = !!(caps && caps.hasChannelUpDown && DirectorClient.hasRemoteCommand(caps, "CHANNEL_DOWN"))
+    remoteNumberPad = !!(caps && caps.hasDiscreteChannelSelect && caps.hasDigits)
+    remoteStar = !!(caps && caps.hasDiscreteChannelSelect && DirectorClient.hasRemoteCommand(caps, "STAR"))
+    remotePound = !!(caps && caps.hasDiscreteChannelSelect && DirectorClient.hasRemoteCommand(caps, "POUND"))
+    remoteSurroundModes = caps && caps.surroundModes ? caps.surroundModes : []
+  }
+
+  function closeRemote() {
+    remoteOpen = false
+    remoteTitle = ""
+    remoteDeviceId = null
+    _applyRemoteCaps(null)
+  }
+
+  function openWatchRemote(id) {
+    var item = DirectorClient.itemForWatchRemote(_items, id)
+    var caps = DirectorClient.parseRemoteCapabilities(item)
+    if (!DirectorClient.hasWatchRemoteUi(caps)) {
+      closeRemote()
+      return
+    }
+    remoteOpen = true
+    remoteTitle = item && item.name ? String(item.name) : ""
+    remoteDeviceId = item && item.id != null ? Number(item.id) : Number(id)
+    _applyRemoteCaps(caps)
+  }
+
+  function sendRemote(command) {
+    if (!remoteOpen || sessionState !== "connected")
+      return
+    var deviceId = remoteDeviceId
+    if (deviceId === null || deviceId === undefined || !isFinite(Number(deviceId)))
+      return
+    var caps = DirectorClient.parseRemoteCapabilities(DirectorClient.findItemById(_items, deviceId))
+    if (!DirectorClient.hasRemoteCommand(caps, command))
+      return
+    directorPost("/api/v1/items/" + deviceId + "/commands", String(command || "").toUpperCase(), {}, function() {})
+  }
+
+  function sendSurround(modeId) {
+    if (!remoteOpen || sessionState !== "connected")
+      return
+    var deviceId = remoteDeviceId
+    if (deviceId === null || deviceId === undefined || !isFinite(Number(deviceId)))
+      return
+    var caps = DirectorClient.parseRemoteCapabilities(DirectorClient.findItemById(_items, deviceId))
+    var modes = caps && caps.surroundModes ? caps.surroundModes : []
+    var n = Number(modeId)
+    var found = false
+    for (var i = 0; i < modes.length; i++) {
+      if (Number(modes[i].id) === n) {
+        found = true
+        break
+      }
+    }
+    if (!found)
+      return
+    var params = DirectorClient.surroundModeParams(n)
+    if (!params)
+      return
+    directorPost("/api/v1/items/" + deviceId + "/commands", "SET_SURROUND_MODE", params, function() {})
   }
 
   function closeBrowse() {
@@ -707,6 +900,8 @@ Item {
   }
 
   function roomOff() {
+    roomOn = false
+    playingSourceName = ""
     _roomCommand("ROOM_OFF", {})
   }
 
@@ -714,24 +909,39 @@ Item {
     if (sessionState !== "connected" || focusedRoomId === null || focusedRoomId === undefined) {
       volumeTimer.stop()
       roomOn = null
+      playingSourceName = ""
       return
     }
     volumeTimer.restart()
     root._volumeGen += 1
     var gen = root._volumeGen
     var id = focusedRoomId
-    directorGet("/api/v1/items/" + id + "/variables?varnames=CURRENT_VOLUME,IS_MUTED,POWER_STATE", function(err, body) {
+    directorGet("/api/v1/items/" + id + "/variables?varnames=CURRENT_VOLUME,IS_MUTED,POWER_STATE,CURRENT_VIDEO_DEVICE,PLAYING_AUDIO_DEVICE,LAST_DEVICE_GROUP", function(err, body) {
       if (gen !== root._volumeGen)
         return
       if (err)
         return
+      var parsed = DirectorClient.parseRoomVolume(body)
+      root.currentVideoDeviceId = parsed.videoDeviceId
+      root.playingAudioDeviceId = parsed.playingAudioDeviceId
+      root.lastDeviceGroup = parsed.lastDeviceGroup || ""
+      if (parsed.power !== undefined)
+        root.roomOn = parsed.power
+      root.playingSourceName = DirectorClient.nowPlayingLabel(
+        parsed,
+        root._items,
+        DirectorClient.extractSources(root._uiConfig, root._items, id, "watch"),
+        DirectorClient.extractSources(root._uiConfig, root._items, id, "listen")
+      )
+      if (root._wantSourceRestore) {
+        root._wantSourceRestore = false
+        restoreActiveSource()
+      }
       if (Date.now() < root._volumeHoldUntil)
         return
-      var parsed = DirectorClient.parseRoomVolume(body)
       if (parsed.volume !== null)
         root.volume = parsed.volume
       root.muted = parsed.muted === true
-      root.roomOn = parsed.power
     })
   }
 
@@ -795,6 +1005,8 @@ Item {
         } catch (e2) {
           return
         }
+        if (items && !Array.isArray(items) && items.items)
+          items = items.items
         root._uiConfig = uiConfig
         root._items = items
         root._applyRooms(DirectorClient.extractRooms(uiConfig, items))
@@ -863,6 +1075,7 @@ Item {
         focusedRoomId = match.id
         focusedRoomName = match.name
         roomsHint = ""
+        _wantSourceRestore = true
       } else if (focusedRoomId !== null && focusedRoomId !== undefined) {
         focusedRoomId = null
         focusedRoomName = ""

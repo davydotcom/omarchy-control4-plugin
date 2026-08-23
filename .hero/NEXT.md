@@ -5,7 +5,7 @@ Project shape: see [SNAPSHOT.md](.hero/SNAPSHOT.md).
 <!-- hero:managed-end -->
 
 ---
-updated: 2026-08-23T19:36:38Z
+updated: 2026-08-23T21:04:06Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
@@ -27,9 +27,6 @@ Run `git log --oneline -10` for recent commits.
 - **listen-library-browse** ← waiting on `watch-and-listen` (delivering)
 - **multi-room-volume-view** ← waiting on `room-session-model` (planning)
 - **room-volume-mute-off** ← waiting on `watch-and-listen` (delivering)
-- **virtual-remote-dpad** ← waiting on `remote-command-metadata` (planning)
-- **virtual-remote-numbers** ← waiting on `virtual-remote-dpad` (planning)
-- **virtual-remote-transport** ← waiting on `virtual-remote-dpad` (planning)
 
 ## Tried and failed
 

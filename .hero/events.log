@@ -12,3 +12,41 @@
 {"ts":"2026-08-23T19:35:56.290726634Z","type":"delivery_complete","agent":"human/david-estes","slug":"remote-command-metadata","message":"Remote command metadata"}
 {"ts":"2026-08-23T19:35:56.29077764Z","type":"spec.status_changed","agent":"human/david-estes","slug":"remote-command-metadata","message":"status -\u003e completed"}
 {"ts":"2026-08-23T19:36:28.752061642Z","type":"drive.pause_outcome","agent":"human","slug":"watch-source-virtual-remote","message":"drive pause Supervised resolved: approved"}
+{"event":"claimed","slug":"watch-receiver-audio-options","agent":"david-estes","at":"2026-08-23T16:00:39.544711915-04:00"}
+{"ts":"2026-08-23T20:06:51.112885939Z","type":"delivery_complete","agent":"human/david-estes","slug":"watch-receiver-audio-options","message":"Watch Sony Receiver shows no audio options"}
+{"ts":"2026-08-23T20:06:51.113066378Z","type":"spec.status_changed","agent":"human/david-estes","slug":"watch-receiver-audio-options","message":"status -\u003e completed"}
+{"ts":"2026-08-23T20:09:43.915708934Z","type":"delivery_complete","agent":"human/david-estes","slug":"virtual-remote-dpad","message":"Virtual remote D-pad"}
+{"ts":"2026-08-23T20:09:43.915807793Z","type":"spec.status_changed","agent":"human/david-estes","slug":"virtual-remote-dpad","message":"status -\u003e completed"}
+{"ts":"2026-08-23T20:19:17.048976662Z","type":"delivery_complete","agent":"human/david-estes","slug":"back-off-buttons-look-disabled","message":"Back and Off buttons look disabled"}
+{"ts":"2026-08-23T20:19:17.049093595Z","type":"spec.status_changed","agent":"human/david-estes","slug":"back-off-buttons-look-disabled","message":"status -\u003e completed"}
+{"event":"claimed","slug":"virtual-remote-transport","agent":"david-estes","at":"2026-08-23T16:23:08.194682066-04:00"}
+{"ts":"2026-08-23T20:26:00.971478341Z","type":"delivery_complete","agent":"human/david-estes","slug":"virtual-remote-transport","message":"Virtual remote transport"}
+{"ts":"2026-08-23T20:26:00.971587544Z","type":"spec.status_changed","agent":"human/david-estes","slug":"virtual-remote-transport","message":"status -\u003e completed"}
+{"event":"claimed","slug":"watch-remote-lost-on-reopen","agent":"david-estes","at":"2026-08-23T16:30:06.187437856-04:00"}
+{"ts":"2026-08-23T20:33:28.297032525Z","type":"delivery_complete","agent":"human/david-estes","slug":"watch-remote-lost-on-reopen","message":"Watch remote lost on reopen and room change"}
+{"ts":"2026-08-23T20:33:28.297169859Z","type":"spec.status_changed","agent":"human/david-estes","slug":"watch-remote-lost-on-reopen","message":"status -\u003e completed"}
+{"event":"claimed","slug":"transport-glyphs-render-emoji","agent":"david-estes","at":"2026-08-23T16:35:28.378330279-04:00"}
+{"ts":"2026-08-23T20:37:20.770789585Z","type":"delivery_complete","agent":"human/david-estes","slug":"transport-glyphs-render-emoji","message":"Transport play pause next look orange"}
+{"ts":"2026-08-23T20:37:20.77095905Z","type":"spec.status_changed","agent":"human/david-estes","slug":"transport-glyphs-render-emoji","message":"status -\u003e completed"}
+{"event":"claimed","slug":"remote-pad-clipped-above-volume","agent":"david-estes","at":"2026-08-23T16:40:03.895537262-04:00"}
+{"ts":"2026-08-23T20:41:32.173862206Z","type":"delivery_complete","agent":"human/david-estes","slug":"remote-pad-clipped-above-volume","message":"Remote pad clipped above volume slider"}
+{"ts":"2026-08-23T20:41:32.17396194Z","type":"spec.status_changed","agent":"human/david-estes","slug":"remote-pad-clipped-above-volume","message":"status -\u003e completed"}
+{"event":"claimed","slug":"drop-halo-row-accent-tick","agent":"david-estes","at":"2026-08-23T16:44:23.500463701-04:00"}
+{"ts":"2026-08-23T20:45:53.584512697Z","type":"delivery_complete","agent":"human/david-estes","slug":"drop-halo-row-accent-tick","message":"Drop orange rail on selected rows"}
+{"ts":"2026-08-23T20:45:53.584631528Z","type":"spec.status_changed","agent":"human/david-estes","slug":"drop-halo-row-accent-tick","message":"status -\u003e completed"}
+{"event":"claimed","slug":"virtual-remote-numbers","agent":"david-estes","at":"2026-08-23T16:48:42.406458257-04:00"}
+{"ts":"2026-08-23T20:50:33.794537101Z","type":"delivery_complete","agent":"human/david-estes","slug":"virtual-remote-numbers","message":"Virtual remote numbers"}
+{"ts":"2026-08-23T20:50:33.794649653Z","type":"spec.status_changed","agent":"human/david-estes","slug":"virtual-remote-numbers","message":"status -\u003e completed"}
+{"ts":"2026-08-23T20:50:34.13943652Z","type":"delivery_complete","agent":"human/david-estes","slug":"watch-source-virtual-remote","message":"Watch-source virtual remote"}
+{"ts":"2026-08-23T20:50:34.139519942Z","type":"spec.status_changed","agent":"human/david-estes","slug":"watch-source-virtual-remote","message":"status -\u003e completed"}
+{"ts":"2026-08-23T20:56:18.874648082Z","type":"delivery_complete","agent":"human/david-estes","slug":"watch-and-listen","message":"Watch and Listen"}
+{"ts":"2026-08-23T20:56:18.874795411Z","type":"spec.status_changed","agent":"human/david-estes","slug":"watch-and-listen","message":"status -\u003e completed"}
+{"ts":"2026-08-23T20:56:19.353733591Z","type":"delivery_complete","agent":"human/david-estes","slug":"volume-slider-reads-room-name","message":"Volume slider reads room name not CURRENT_VOLUME"}
+{"ts":"2026-08-23T20:56:19.353940785Z","type":"spec.status_changed","agent":"human/david-estes","slug":"volume-slider-reads-room-name","message":"status -\u003e completed"}
+{"ts":"2026-08-23T20:56:19.799580213Z","type":"delivery_complete","agent":"human/david-estes","slug":"room-volume-mute-off","message":"Room volume, mute, and off"}
+{"ts":"2026-08-23T20:56:19.799671884Z","type":"spec.status_changed","agent":"human/david-estes","slug":"room-volume-mute-off","message":"status -\u003e completed"}
+{"ts":"2026-08-23T20:56:20.254694928Z","type":"delivery_complete","agent":"human/david-estes","slug":"listen-library-browse","message":"Listen library browse"}
+{"ts":"2026-08-23T20:56:20.254823261Z","type":"spec.status_changed","agent":"human/david-estes","slug":"listen-library-browse","message":"status -\u003e completed"}
+{"ts":"2026-08-23T20:56:20.705520628Z","type":"delivery_complete","agent":"human/david-estes","slug":"halo-panel-chrome","message":"Halo panel chrome"}
+{"ts":"2026-08-23T20:56:20.705666333Z","type":"spec.status_changed","agent":"human/david-estes","slug":"halo-panel-chrome","message":"status -\u003e completed"}
+{"event":"claimed","slug":"room-now-playing","agent":"david-estes","at":"2026-08-23T17:03:05.47789465-04:00"}

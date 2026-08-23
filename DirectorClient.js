@@ -354,16 +354,28 @@ function extractSources(uiConfig, items, roomId, mode) {
   return out
 }
 
+function _emptyRoomVolume() {
+  return {
+    volume: null,
+    muted: false,
+    power: null,
+    videoDeviceId: null,
+    playingAudioDeviceId: null,
+    lastDeviceGroup: ""
+  }
+}
+
+function _finiteId(value) {
+  var n = Number(value)
+  return isFinite(n) ? n : null
+}
+
 function parseRoomVolume(raw) {
-  var volume = null
-  var muted = false
-  // null means "not reported", which is not the same as off — the chip has to
-  // tell room-off apart from not-connected.
-  var power = null
+  var out = _emptyRoomVolume()
   try {
     var list = JSON.parse(String(raw || ""))
     if (!Array.isArray(list))
-      return { volume: null, muted: false, power: null }
+      return out
     for (var i = 0; i < list.length; i++) {
       var row = list[i]
       if (!row)
@@ -372,21 +384,66 @@ function parseRoomVolume(raw) {
       if (key === "CURRENT_VOLUME") {
         var n = Number(row.value)
         if (isFinite(n))
-          volume = Math.max(0, Math.min(100, Math.round(n)))
+          out.volume = Math.max(0, Math.min(100, Math.round(n)))
       }
       if (key === "IS_MUTED") {
         var v = row.value
-        muted = v === true || v === "true" || v === "1" || v === 1
+        out.muted = v === true || v === "true" || v === "1" || v === 1
       }
       if (key === "POWER_STATE") {
         var p = row.value
-        power = !(p === 0 || p === "0" || p === false || p === "false")
+        out.power = !(p === 0 || p === "0" || p === false || p === "false")
+      }
+      if (key === "CURRENT_VIDEO_DEVICE")
+        out.videoDeviceId = _finiteId(row.value)
+      if (key === "PLAYING_AUDIO_DEVICE")
+        out.playingAudioDeviceId = _finiteId(row.value)
+      if (key === "LAST_DEVICE_GROUP") {
+        var g = String(row.value == null ? "" : row.value).trim().toLowerCase()
+        if (g === "watch" || g === "listen")
+          out.lastDeviceGroup = g
       }
     }
   } catch (e) {
-    return { volume: null, muted: false, power: null }
+    return _emptyRoomVolume()
   }
-  return { volume: volume, muted: muted, power: power }
+  return out
+}
+
+function _nameFromSources(sources, id) {
+  var n = Number(id)
+  if (!isFinite(n) || !sources)
+    return ""
+  for (var i = 0; i < sources.length; i++) {
+    if (!sources[i] || Number(sources[i].id) !== n)
+      continue
+    var name = sources[i].name != null ? String(sources[i].name).trim() : ""
+    if (name)
+      return name
+  }
+  return ""
+}
+
+function _nameFromItems(items, id) {
+  var item = findItemById(items, id)
+  if (!item || item.name == null)
+    return ""
+  return String(item.name).trim()
+}
+
+function nowPlayingLabel(parsed, items, watchSources, listenSources) {
+  if (!parsed || parsed.power === false)
+    return ""
+  if (parsed.lastDeviceGroup === "listen") {
+    var audioId = parsed.playingAudioDeviceId
+    return _nameFromSources(listenSources, audioId) || _nameFromItems(items, audioId)
+  }
+  var watchId = matchWatchSourceId(watchSources, items, parsed.videoDeviceId)
+  if (watchId != null)
+    return _nameFromSources(watchSources, watchId) || _nameFromItems(items, watchId)
+  if (parsed.videoDeviceId != null)
+    return _nameFromItems(items, parsed.videoDeviceId)
+  return ""
 }
 
 function curlNavArgs(opts) {
@@ -516,7 +573,7 @@ function _commandName(entry) {
   }
   if (!entry || typeof entry !== "object")
     return ""
-  var keys = ["name", "command", "id"]
+  var keys = ["name", "command", "id", "#text", "_"]
   for (var i = 0; i < keys.length; i++) {
     if (entry[keys[i]] == null)
       continue
@@ -525,6 +582,102 @@ function _commandName(entry) {
       return t.toUpperCase()
   }
   return ""
+}
+
+function _commandList(item) {
+  if (!item || typeof item !== "object")
+    return []
+  var commands = item.commands
+  if (commands == null)
+    return []
+  if (typeof commands === "string")
+    return _asArray(commands)
+  if (Array.isArray(commands))
+    return commands
+  if (typeof commands === "object")
+    return _asArray(commands.command)
+  return []
+}
+
+function itemArray(items) {
+  if (Array.isArray(items))
+    return items
+  if (items && Array.isArray(items.items))
+    return items.items
+  return []
+}
+
+function findItemById(items, id) {
+  var n = Number(id)
+  if (!isFinite(n))
+    return null
+  var list = itemArray(items)
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && Number(list[i].id) === n)
+      return list[i]
+  }
+  return null
+}
+
+function hasWatchRemoteUi(caps) {
+  if (!caps)
+    return false
+  if (caps.hasNavigation || caps.hasTransport)
+    return true
+  if (caps.hasChannelUpDown || caps.hasDiscreteChannelSelect)
+    return true
+  return !!(caps.surroundModes && caps.surroundModes.length)
+}
+
+function itemForWatchRemote(items, sourceId) {
+  var item = findItemById(items, sourceId)
+  if (item && hasWatchRemoteUi(parseRemoteCapabilities(item)))
+    return item
+  var n = Number(sourceId)
+  var list = itemArray(items)
+  if (isFinite(n)) {
+    for (var i = 0; i < list.length; i++) {
+      var child = list[i]
+      if (!child || Number(child.parentId || child.parentid) !== n)
+        continue
+      if (hasWatchRemoteUi(parseRemoteCapabilities(child)))
+        return child
+    }
+  }
+  if (item && (item.parentId != null || item.parentid != null)) {
+    var parent = findItemById(items, item.parentId != null ? item.parentId : item.parentid)
+    if (parent && hasWatchRemoteUi(parseRemoteCapabilities(parent)))
+      return parent
+  }
+  return item
+}
+
+function matchWatchSourceId(sources, items, deviceId) {
+  var n = Number(deviceId)
+  if (!isFinite(n))
+    return null
+  var list = sources || []
+  var i
+  for (i = 0; i < list.length; i++) {
+    if (list[i] && Number(list[i].id) === n)
+      return n
+  }
+  var resolved = itemForWatchRemote(items, n)
+  if (resolved && resolved.id != null) {
+    var rid = Number(resolved.id)
+    for (i = 0; i < list.length; i++) {
+      if (list[i] && Number(list[i].id) === rid)
+        return rid
+    }
+  }
+  for (i = 0; i < list.length; i++) {
+    if (!list[i] || list[i].id == null)
+      continue
+    var walked = itemForWatchRemote(items, list[i].id)
+    if (walked && Number(walked.id) === n)
+      return Number(list[i].id)
+  }
+  return null
 }
 
 function _emptyRemoteCapabilities() {
@@ -543,7 +696,9 @@ function _emptyRemoteCapabilities() {
     power: { on: false, off: false },
     showTransport: null,
     displayIcon: "",
-    displayIcons: []
+    displayIcons: [],
+    hasDiscreteSurroundModeSelect: false,
+    surroundModes: []
   }
 }
 
@@ -557,7 +712,7 @@ function parseRemoteCapabilities(item) {
   var caps = _emptyRemoteCapabilities()
   if (!item || typeof item !== "object")
     return caps
-  var list = _asArray(item.commands && item.commands.command)
+  var list = _commandList(item)
   var seen = {}
   for (var i = 0; i < list.length; i++) {
     var name = _commandName(list[i])
@@ -615,8 +770,31 @@ function parseRemoteCapabilities(item) {
         }
       }
     }
+    caps.hasDiscreteSurroundModeSelect = _truthyFlag(capab.has_discrete_surround_mode_select)
+    var modes = []
+    if (capab.surround_modes && typeof capab.surround_modes === "object")
+      modes = _asArray(capab.surround_modes.surround_mode)
+    for (var m = 0; m < modes.length; m++) {
+      var mode = modes[m]
+      if (!mode || typeof mode !== "object")
+        continue
+      var modeId = Number(mode.id)
+      var modeName = mode.name != null ? String(mode.name).trim() : ""
+      if (!isFinite(modeId) || !modeName)
+        continue
+      caps.surroundModes.push({ id: modeId, name: modeName })
+    }
   }
   return caps
+}
+
+// Receiver proxy audio output 1 is binding 4000 in the Control4 receiver
+// protocol (confirmed live on this Director as bindingName "Output").
+function surroundModeParams(modeId) {
+  var n = Number(modeId)
+  if (!isFinite(n))
+    return null
+  return { SURROUNDMODE: n, OUTPUT: 4000 }
 }
 
 function hasRemoteCommand(caps, name) {

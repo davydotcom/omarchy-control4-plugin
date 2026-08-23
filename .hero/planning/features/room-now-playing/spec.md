@@ -2,97 +2,152 @@
 title: Room now playing
 slug: room-now-playing
 type: feature
-status: planning
+status: delivering
 domain: engineering
-size: large
+size: small
 horizon: now
+priority: medium
 parent: control4-focused-room-remote
 depends-on:
   - focused-room
+relates-to:
+  - watch-and-listen
+  - room-volume-mute-off
+  - watch-remote-lost-on-reopen
+  - halo-panel-chrome
+  - halo-remote-panel-style
+  - back-off-buttons-look-disabled
 created: 2026-08-21
 tags: [omarchy, control4]
+claimed_by: david-estes
+claimed_at: 2026-08-23T17:03:05-04:00
 ---
 # Room now playing
 
 ## Context
 
-Sixth child of `control4-focused-room-remote`. Technical depends-on is `focused-room`; **deliver after `watch-and-listen`** so the chip can reflect a source this plugin selected. pyControl4 room variables cover power and volume: `POWER_STATE`, `CURRENT_VOLUME`, `IS_MUTED` ([pyControl4 room](https://lawtancool.github.io/pyControl4/room.html)). Current watch/listen source names need `/design` to pin the `ui_configuration` / item-variable fields — do not invent them in this stub. Parent: `.hero/planning/initiatives/control4-focused-room-remote/spec.md`.
+Last open child of `control4-focused-room-remote`. Watch/Listen, volume/mute/Off, Halo chrome, and Watch-remote restore already shipped. The Director poll those specs share already reads `POWER_STATE`, `CURRENT_VIDEO_DEVICE`, `PLAYING_AUDIO_DEVICE`, and `LAST_DEVICE_GROUP` (`watch-remote-lost-on-reopen`). `Service.qml` already stashes `roomOn` and the device ids. The bar chip in the working tree already draws `icon.png` / `icon-off.png` from `roomOn`.
+
+What is still missing: a Halo-style now-playing *readout* (source name, not a greyed-out control), Off reflecting power without looking disabled, and the chip tooltip naming the source so an icon-only mark still answers “what’s on.” Parent: `.hero/planning/initiatives/control4-focused-room-remote/spec.md`.
 
 ## Goal
 
-Poll the focused room's `POWER_STATE`, volume/mute, and current watch/listen source, and make that state legible in two places: the bar chip and the panel. The chip stops spelling out the room name — it becomes a Control4 mark whose icon state says whether the room is on or off. In the panel, room state reads in Halo style rather than being implied by controls that look disabled.
+The focused room’s power and current Watch/Listen source are legible without spelling the room name on the bar. The chip is a Control4 mark (on / off / not-connected). The panel status line and the chip tooltip name the playing source, or Off. Off stays pressable and reads as the selected state when the room is off.
 
 ## Kickoff
 
-Poll focused-room power, volume/mute, and source; show now-playing on the chip and panel header.
+Show room on/off on the Control4 mark and name the playing source in the panel status line and tooltip.
 
-**Status:** planning — Watch/Listen has shipped, so this is unblocked and promoted to `horizon: now`. User asked for the chip to become a Control4 mark with on/off icon states, and for room state to read Halo-style in the panel.
+**Status:** delivering — code landed; close the verify gate.
 
-**Pick up at:** `/design room-now-playing`. Room variables are already confirmed live (see Approach) — design the chip states and the panel's state treatment.
+**Pick up at:** `hero spec verify room-now-playing --skip-tests`
 
-→ `/design room-now-playing`
+→ `/deliver room-now-playing`
 
-**Files:** `BarWidget.qml`, `Panel.qml`, `Service.qml`, `.hero/planning/features/room-now-playing/spec.md`
+**Files:** `DirectorClient.js:434`, `Service.qml:84`, `Panel.qml:47`, `BarWidget.qml:18`, `tests/director-client.test.js:332`
 
-**Skip:** lights/climate metadata; websocket-only designs unless `/design` proves REST poll is insufficient; transport controls; a second volume slider.
+**Skip:** `media_sessions` / artwork; a second poll; websocket; putting the room or source name on the chip; restyling Off as muted.
 
 ## Approach
 
-A poll on the existing Director session. The room variables no longer need guessing — `GET /api/v1/items/{roomId}/variables` was read live on this Director and carries all of it:
+**Do not add a poll.** `refreshVolume` already GETs `CURRENT_VOLUME,IS_MUTED,POWER_STATE,CURRENT_VIDEO_DEVICE,PLAYING_AUDIO_DEVICE,LAST_DEVICE_GROUP` every 2s. Parse stays `DirectorClient.parseRoomVolume`. This child only *displays* `power` and a resolved source name.
 
-- `POWER_STATE` — 0 when the room is off. This is the state the chip and the Off control should reflect.
-- `CURRENT_VOLUME`, `IS_MUTED` — already polled by `room-volume-mute-off`; do not add a second poll.
-- `CURRENT_SELECTED_DEVICE`, `CURRENT_AUDIO_DEVICE`, `CURRENT_VIDEO_DEVICE`, `PLAYING_AUDIO_DEVICE` — device ids, resolved to names through the `_items` list the plugin already holds.
-- `LAST_DEVICE_GROUP` — `"watch"` or `"listen"`, useful for which mode to show.
-- `CURRENT_MEDIA` / `CURRENT MEDIA INFO` — present but empty on this Director; richer now-playing comes from `/api/v1/media_sessions` (`mediainfo` with artist/album/title/art), which is also what `multi-room-audio` will read.
+**Resolve the source name** in `DirectorClient.nowPlayingLabel(parsed, items, watchSources, listenSources)`:
 
-Note `CURRENT_AUDIO_DEVICE` tracks the digital-media *player* (`100002` here), not the media service — `PLAYING_AUDIO_DEVICE` is the one that names what is actually playing. Reading the wrong one will show "Digital Media" forever.
+- If `parsed.power === false` → `""` (caller shows Off; never a stale name).
+- If `parsed.lastDeviceGroup === "listen"` → name of `playingAudioDeviceId` from `listenSources`, else `_items`. Never `CURRENT_AUDIO_DEVICE` (that is the digital-media player `100002` on this Director).
+- Otherwise (watch, or group empty with a video id) → `matchWatchSourceId(watchSources, items, parsed.videoDeviceId)`, then that source’s name, else the item name.
+- No id or no name → `""`.
 
-**Bar chip.** `BarWidget.qml` currently sets `chipText` to the room name with a 140-wide clip, which is the width complaint. Replace the text with a Control4 mark that carries on/off state — the room name moves to the tooltip, which already composes it. `/design` owns whether the mark is a glyph or an asset and how "connected but room off" differs visually from "not connected".
+`Service.qml` keeps `playingSourceName` as a string, set on every successful volume parse (same `_volumeGen` guard). Rebuild watch/listen lists with the already-cached `_uiConfig` / `_items` / `focusedRoomId` — do not refetch items for the label.
 
-**Panel.** Room state should read as state, not as a greyed-out control. This is the other half of the bug `back-off-buttons-look-disabled`: today Off is permanently muted-looking, so it reads disabled *and* never indicates whether the room is on. Follow `halo-remote-panel-style`.
+**Chip (`BarWidget.qml`).** Keep the working-tree mark. Do not put room or source text on the chip.
 
-`/design` owns poll interval and whether push/websocket is worth it (default: poll, reusing the existing volume poll rather than adding a second).
+| Session | Mark |
+|---|---|
+| Connected + focused + `roomOn === true` | Official 4-Ball `icon.png` |
+| Connected + focused + `roomOn === false` or `null` | White mark `icon-off.png` |
+| Not connected, or no focused room | White mark at `opacity: 0.55` |
+
+Keep both `Image`s loaded and toggle `visible`. Swapping `Image.source` on `ROOM_OFF` left a blank chip while the white PNG decoded. `WidgetButton.text` stays unused (`labelVisible: false`). Room name stays in the tooltip, which already exists; append the source when the room is on and `playingSourceName` is non-empty:
+
+- `Control4 · Deck — Off`
+- `Control4 · Deck — On · Apple TV`
+- `Control4 · Deck — On`
+- not connected: `Control4 — <statusText>` (unchanged)
+
+Vertical bar: the mark is square (`fontSize * 1.7`); no extra width.
+
+**Panel status.** Replace `panelStatus`’s `Watch · Connected` once a room is focused. Connection is implied.
+
+| State | `panelStatus` |
+|---|---|
+| No focused room | `sessionStatus` (unchanged) |
+| `roomOn === false` | `Off` |
+| On + named source | `Watch · Sony Reciever` or `Listen · Apple Music` (`LAST_DEVICE_GROUP`, else Watch when a video id matched) |
+| On + no name | `On` |
+| `roomOn === null` (first poll) | `sessionStatus` |
+
+Title stays the room name. Status stays `haloTextMuted` (status voice, not a control).
+
+**Source highlight.** `chosen` on a source row only while `roomOn !== false` and `selectedSourceId` matches. Restore already sets `selectedSourceId`; this child only suppresses the highlight when the room is off.
+
+**Off.** Keep `secondary: true` (`back-off-buttons-look-disabled`). Add `chosen: session.roomOn === false` so Off is the selected surface when the room is off. Label stays `Off`. Do not paint it `haloTextMuted`.
+
+**Optimistic power.** `roomOff()` sets `roomOn = false` and `playingSourceName = ""` before POST so the chip does not wait 2s. `selectSource` sets `roomOn = true` when it posts a SELECT (not when it skips SELECT for the already-current source — that room is already on). Poll remains source of truth after that.
 
 ## Changes
 
-Will be produced by `/design room-now-playing`. No file-level Changes until then.
+1. `DirectorClient.js` — add `nowPlayingLabel(parsed, items, watchSources, listenSources)` as specified in Approach. Reuse `matchWatchSourceId`. Export it next to `parseRoomVolume`.
+2. `tests/director-client.test.js` — fixtures:
+   - `POWER_STATE` 0 → `""` even when video/audio ids are present
+   - watch id `431` + Base Fam Apple TV name
+   - listen `PLAYING_AUDIO_DEVICE` 10 + TuneIn/Apple Music name; ignore a `CURRENT_AUDIO_DEVICE` of `100002` if someone adds it to the parse fixture
+   - unknown ids → `""`
+   - `LAST_DEVICE_GROUP: "Listen"` (capital L) already lowercased by parse
+3. `Service.qml` — `playingSourceName` string; set it in `refreshVolume` from `nowPlayingLabel`; clear it on disconnect / unfocused / `setFocusedRoom`; optimistic `roomOff` / `selectSource` as in Approach. No new Timer. No `media_sessions` GET.
+4. `Panel.qml` — rewrite `panelStatus`; source `chosen` requires `roomOn !== false`; Off `chosen` when `roomOn === false`.
+5. `BarWidget.qml` — keep dual-Image mark; extend `chipTooltip` with `playingSourceName` when on. Do not revert to room-name chip text.
+6. `icon.png` / `icon-off.png` — these are the on/off marks. They must stay in the plugin copy set (`README` already lists them).
+7. `README.md` — remove the leftover “chip then shows that room name / stays `C4`” sentence. Document mark + tooltip + panel status.
+8. `.hero/knowledge/conventions/halo-remote-panel-style/spec.md` — layout example uses `Listen · Apple Music` / `Off` instead of `Listen · Connected`; bar-chip exception names the two PNGs.
 
 ## Boundaries
 
-- No transport controls (play/pause/stop) — those are `watch-source-virtual-remote`
-- No artwork/metadata browser beyond source name + power/volume/mute
-- No lights/climate/shades status
-- Volume *slider* and mute are `room-volume-mute-off` (including the `CURRENT_VOLUME` poll). This child is state display, not a second volume control.
-- No multi-room state — one focused room only (`multi-room-audio` owns the rest)
-- Fixing the muted look of Back and Off is the bug `back-off-buttons-look-disabled`; this child owns what Off *reflects*, not the shared row styling
+- No transport play/pause *state* and no combined play/pause toggle
+- No `GET /api/v1/media_sessions`, artwork, artist/album/title — `multi-room-audio` owns richer now-playing
+- No second variables poll and no websocket
+- No room name or source name as chip text
+- No lights / climate / shades
+- Volume slider and mute stay `room-volume-mute-off`
+- Off chrome (secondary vs muted) stays `back-off-buttons-look-disabled`; this child only adds `chosen` when the room is off
+- Do not restore the Watch remote from this spec (`watch-remote-lost-on-reopen` already does)
 
 ## Risks
 
-- Reading `CURRENT_AUDIO_DEVICE` instead of `PLAYING_AUDIO_DEVICE` will show the digital-media player rather than the source, forever.
-- Too-aggressive polling will load the Director on top of the existing volume poll; too-slow polling will make Watch/Listen look broken.
-- Three states collapse easily into two: room off, room on but idle, and plugin not connected must stay distinguishable on a chip that is now an icon rather than text.
-- Dropping the room name from the chip removes the only at-a-glance cue of *which* room is focused when several rooms exist. The tooltip carries it, but `/design` should confirm that is enough.
-- An icon-only chip must still be legible in the bar's vertical orientation.
+- Reading `CURRENT_AUDIO_DEVICE` instead of `PLAYING_AUDIO_DEVICE` shows “Digital Media” forever.
+- Showing a source name while `POWER_STATE` is 0 is the stale-on-off bug this child exists to prevent.
+- Two `chosen` rows (a source and Off) if the source highlight is not gated on `roomOn`.
+- Swapping `Image.source` instead of toggling two loaded images blanks the chip.
+- Optimistic `roomOff` can lie for one poll if `ROOM_OFF` no-ops; the next 2s parse corrects it.
 
 ## Acceptance Criteria
 
-- WHILE a focused room is selected THE SYSTEM SHALL poll `POWER_STATE`, volume, and mute for that room and show them on the bar chip and panel header
-- WHEN the focused room has a current watch or listen source THE SYSTEM SHALL show that source name on the chip and panel header
-- IF the room is off THEN THE SYSTEM SHALL show an off state rather than a stale source name
-- THE SYSTEM SHALL use the existing Director session (no second login path)
+- **AC-1:** WHILE a focused room is connected THE SYSTEM SHALL keep using the existing room-variables poll (no second Timer, no `media_sessions` GET)
+- **AC-2:** WHEN `POWER_STATE` is 0 THE SYSTEM SHALL show the white Control4 mark on the chip, `Off` in the panel status line, and SHALL NOT show a source name
+- **AC-3:** WHEN `POWER_STATE` is on and `LAST_DEVICE_GROUP` is listen THE SYSTEM SHALL show the name of `PLAYING_AUDIO_DEVICE` in the panel status line and the chip tooltip
+- **AC-4:** WHEN `POWER_STATE` is on and the current video device matches a Watch source THE SYSTEM SHALL show that source name in the panel status line and the chip tooltip
+- **AC-5:** WHEN the plugin is not connected or no room is focused THE SYSTEM SHALL show the white mark at reduced opacity, distinct from room-off
+- **AC-6:** THE SYSTEM SHALL NOT spell the room name or the source name as chip text
+- **AC-7:** WHILE the focused room is off THE SYSTEM SHALL mark the Off row chosen and SHALL NOT mark a source row chosen
+- **AC-8:** WHEN the user activates Off THE SYSTEM SHALL show the off chip and `Off` status before the next poll returns
 
 ## Validation
 
-This stub is ready for `/design room-now-playing` after `watch-and-listen` is designed (horizon `next`), so the chip can reflect a source this plugin selected. `/design` pins source fields and poll interval; do not implement from this stub.
+```
+node tests/director-client.test.js
+```
 
-## Acceptance Criteria
+Live copy of QML/JS + both PNGs, then `omarchy restart shell` if the icons are new to the live folder.
 
-- WHEN the focused room is off THE SYSTEM SHALL show an off state on the bar chip and in the panel
-- WHEN the focused room is on THE SYSTEM SHALL show an on state and name the playing source
-- WHEN the plugin is not connected THE SYSTEM SHALL show a state distinct from both room-on and room-off
-- THE SYSTEM SHALL NOT spell the room name across the bar chip
-
-## Validation
-
-Live: turn the focused room off from the panel and watch the chip change state; start a source and watch it change back and name the source. Confirm the tooltip still identifies the room. `qmllint` clean.
+Manual: focused room Off → white mark, tooltip `… — Off`, panel status `Off`, Off row selected. Watch a source → official 4-Ball, tooltip names the source, panel `Watch · <name>`, that source row chosen. Listen → `Listen · <name>` from `PLAYING_AUDIO_DEVICE`, not Digital Media. Disconnect / no room → faded white mark. Room name only in the tooltip and the panel title.

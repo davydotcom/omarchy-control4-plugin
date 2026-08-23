@@ -14,7 +14,9 @@ relates-to:
 
 ## Overview
 
-V1 of this plugin targets Control4 OS 3.x local REST with a cloud-issued director bearer JWT (the pyControl4 account → director token path). OS 4.2 currently rejects that token on local `/api/v1/*`.
+V1 of this plugin talks to the Director over LAN with a cloud-issued director bearer JWT (the pyControl4 account → director token path). That path **works on Control4 OS 4** (this repo's development house) and on OS 3.x.
+
+**OS 4.2** is a separate incompatibility: some controllers (reported: OS 4.2.0.753182-res) still reject that token on local `/api/v1/*` with HTTP 401. Do not treat a working local JWT as proof the house is OS 3.x. Do not jailbreak. Surface a clear 401; do not silently skip OS 4.2 as if OS 4 as a whole were unsupported.
 
 ## Details
 

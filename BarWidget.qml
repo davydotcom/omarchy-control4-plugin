@@ -12,19 +12,20 @@ BarWidget {
   readonly property bool hasFocusedRoom: session
     && session.sessionState === "connected"
     && String(session.focusedRoomName || "").length > 0
-  // The room name is in the tooltip, not the chip: spelling it across the bar
-  // cost a lot of width and still never said "Control4". The mark is the
-  // identity; colour carries the room's power state.
+  // The room name is in the tooltip, not the chip. Official 4-Ball when
+  // the room is on; the same mark in white when it is off.
   readonly property bool roomOn: hasFocusedRoom && session.roomOn === true
-  readonly property color chipOnColor: "#E4322B"
   readonly property string chipTooltip: {
     if (hasFocusedRoom) {
       var state = session.roomOn === true ? "On" : (session.roomOn === false ? "Off" : "")
       var parts = String(session.focusedRoomName)
       if (state !== "")
         parts += " — " + state
-      if (sessionStatus !== "")
-        parts += " · " + sessionStatus
+      if (state === "On") {
+        var src = session.playingSourceName ? String(session.playingSourceName) : ""
+        if (src !== "")
+          parts += " · " + src
+      }
       return "Control4 · " + parts
     }
     return sessionStatus !== "" ? ("Control4 — " + sessionStatus) : "Control4"
@@ -111,39 +112,40 @@ BarWidget {
     text: "Control4"
     labelVisible: false
     tooltipText: root.chipTooltip
-    fixedWidth: root.vertical ? -1 : Math.max(12, chipClip.width + button.scaledHorizontalMargin * 2)
+    fixedWidth: root.vertical ? -1 : Math.max(12, chip.width + button.scaledHorizontalMargin * 2)
 
-    // Control4's mark is a numeral in a rounded square. Drawn rather than
-    // shipped as an asset so it scales with the bar and recolours for state.
+    // Both marks stay loaded. Swapping Image.source on ROOM_OFF left a
+    // blank chip while the white PNG decoded (or failed to).
     Item {
-      id: chipClip
+      id: chip
       enabled: false
       anchors.centerIn: parent
-      width: badge.width
-      height: badge.height
+      width: Math.round(button.fontSize * 1.7)
+      height: width
+      opacity: root.hasFocusedRoom ? 1.0 : 0.55
 
-      Rectangle {
-        id: badge
-        width: Math.round(chipGlyph.implicitHeight * 1.45)
-        height: width
-        radius: Math.max(2, Math.round(width * 0.24))
-        // Filled when the room is on, hollow otherwise — readable as state
-        // even where the accent colour is hard to judge against a wallpaper.
-        color: root.roomOn ? root.chipOnColor : "transparent"
-        border.color: root.roomOn ? root.chipOnColor : button.foreground
-        border.width: 1
-        opacity: root.hasFocusedRoom ? 1.0 : 0.55
+      Image {
+        anchors.fill: parent
+        source: Qt.resolvedUrl("icon.png")
+        fillMode: Image.PreserveAspectFit
+        smooth: true
+        mipmap: true
+        asynchronous: false
+        visible: root.roomOn
+        sourceSize.width: Math.round(width * Screen.devicePixelRatio)
+        sourceSize.height: Math.round(height * Screen.devicePixelRatio)
+      }
 
-        Text {
-          id: chipGlyph
-          anchors.centerIn: parent
-          text: "4"
-          color: root.roomOn ? "#FFFFFF" : button.foreground
-          font.family: button.fontFamily
-          font.pixelSize: button.fontSize
-          font.bold: true
-          renderType: Text.NativeRendering
-        }
+      Image {
+        anchors.fill: parent
+        source: Qt.resolvedUrl("icon-off.png")
+        fillMode: Image.PreserveAspectFit
+        smooth: true
+        mipmap: true
+        asynchronous: false
+        visible: !root.roomOn
+        sourceSize.width: Math.round(width * Screen.devicePixelRatio)
+        sourceSize.height: Math.round(height * Screen.devicePixelRatio)
       }
     }
 

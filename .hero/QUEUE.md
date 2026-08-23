@@ -6,39 +6,22 @@
 
 # Hero Ready Queue
 
-_Generated: 2026-08-23T19:36:38Z · 9 ready specs_
+_Generated: 2026-08-23T21:04:07Z · 6 ready specs_
 
-## volume-slider-reads-room-name — Volume slider reads room name not CURRENT_VOLUME
-_bug · delivering · horizon: now_
-
-Volume slider stays 0 because parse uses `name` (room title) instead of `varName`.
-
-**Status:** delivering — parser now keys `varName`; tests include live Deck shape (`value` 32, `name` Deck).
-
-**Pick up at:** confirm the slider shows ~32 on Deck, then `hero spec verify volume-slider-reads-room-name`.
-
-→ `/deliver volume-slider-reads-room-name`
-
-**Files:** `DirectorClient.js`, `tests/director-client.test.js`
-
-**Skip:** new HTTP client; pulse buttons; now-playing chip.
-
----
-
-## watch-and-listen — Watch and Listen
+## room-now-playing — Room now playing
 _feature · delivering · horizon: now_
 
-One Watch/Listen source picker on the focused room; filter and command change, UI does not.
+Show room on/off on the Control4 mark and name the playing source in the panel status line and tooltip.
 
-**Status:** delivering — Deck listen-only auto-flips to Listen; Amazon Music / Apple Music / etc. listed live. Source tap not CLI-clicked.
+**Status:** delivering — code landed; close the verify gate.
 
-**Pick up at:** tap a Listen source, then Watch on a video room; `hero spec verify` after live POST.
+**Pick up at:** `hero spec verify room-now-playing --skip-tests`
 
-→ `/deliver watch-and-listen`
+→ `/deliver room-now-playing`
 
-**Files:** `DirectorClient.js`, `Service.qml`, `Panel.qml`, `tests/director-client.test.js`
+**Files:** `DirectorClient.js:434`, `Service.qml:84`, `Panel.qml:47`, `BarWidget.qml:18`, `tests/director-client.test.js:332`
 
-**Skip:** two pickers; `audio_devices`; volume/mute/off; now-playing; cameras; transport.
+**Skip:** `media_sessions` / artwork; a second poll; websocket; putting the room or source name on the chip; restyling Off as muted.
 
 ---
 
@@ -48,6 +31,32 @@ _initiative · planning · horizon: now_
 _Run opener — arm with `/drive control4-focused-room-remote`_
 
 Ship a third-party Omarchy plugin that authenticates to a local Control4 Director, keeps one room in focus, and lets the user Watch, Listen, adjust volume, mute, and turn that room off — with now-playing reflected on the chip and panel. Success is a working bar-widget on OS 3.x local REST with a cloud-issued director JWT, not feature parity with Composer or the Control4 app.
+
+---
+
+## experience-switch — Experience switch
+_feature · planning · horizon: now_
+
+Turn Watch/Listen into a Repeater over implemented experience modes; keep this house at two tabs.
+
+**Status:** planning — designed, not delivered. This Director has no lighting/climate/shades to show.
+
+**Pick up at:** `/deliver experience-switch`.
+
+→ `/deliver experience-switch`
+
+**Files:** `DirectorClient.js`, `Service.qml`, `Panel.qml`, `tests/director-client.test.js`, `.hero/knowledge/conventions/halo-remote-panel-style/spec.md`
+
+**Skip:** Lighting/Climate/Shades/Scenes UI; changing select commands; wrapping for n>3 unless the Repeater is free.
+
+---
+
+## room-environment — Room environment
+_initiative · planning · horizon: now_
+
+_Run opener — arm with `/drive room-environment`_
+
+Stage scenes, lighting, temperature, and blinds as later children, and ship one small now-child that makes the panel's experience switch a list of implemented modes instead of a hardcoded Watch | Listen pair. Success is: this house still shows exactly Watch and Listen, and adding Lighting later is "register a mode + handler," not a second two-tab rewrite.
 
 ---
 
@@ -74,63 +83,3 @@ Parse and poll `/api/v1/media_sessions` into a rooms-per-session model. No UI.
 **Files:** `DirectorClient.js`, `Service.qml`, `tests/director-client.test.js`
 
 **Skip:** any `Panel.qml` change; adding/removing rooms; per-room volume writes.
-
----
-
-## room-now-playing — Room now playing
-_feature · planning · horizon: now_
-
-Poll focused-room power, volume/mute, and source; show now-playing on the chip and panel header.
-
-**Status:** planning — Watch/Listen has shipped, so this is unblocked and promoted to `horizon: now`. User asked for the chip to become a Control4 mark with on/off icon states, and for room state to read Halo-style in the panel.
-
-**Pick up at:** `/design room-now-playing`. Room variables are already confirmed live (see Approach) — design the chip states and the panel's state treatment.
-
-→ `/design room-now-playing`
-
-**Files:** `BarWidget.qml`, `Panel.qml`, `Service.qml`, `.hero/planning/features/room-now-playing/spec.md`
-
-**Skip:** lights/climate metadata; websocket-only designs unless `/design` proves REST poll is insufficient; transport controls; a second volume slider.
-
----
-
-## watch-source-virtual-remote — Watch-source virtual remote
-_initiative · planning · horizon: next_
-
-_Run opener — arm with `/drive watch-source-virtual-remote`_
-
-After Watch selects a source, the panel shows a virtual remote whose buttons come from that item's own published command set: navigation for anything with a D-pad, transport where the device declares it, digits where the device declares channel entry. An Apple TV and a cable box get different remotes without the plugin knowing either brand by name. Success is pressing Menu/Up/Down/Left/Right/Enter on the focused room's Apple TV and seeing it respond.
-
----
-
-## virtual-remote-dpad — Virtual remote D-pad
-_feature · planning · horizon: next_
-
-D-pad, Menu, Enter for the selected watch source — rendered from metadata, Halo-styled.
-
-**Status:** planning — blocked on `remote-command-metadata` and on one live command POST proving the endpoint.
-
-**Pick up at:** `/design virtual-remote-dpad`. Before UI work, confirm one live press moves the Apple TV.
-
-→ `/design virtual-remote-dpad`
-
-**Files:** `Service.qml`, `Panel.qml`, `.hero/planning/features/virtual-remote-dpad/spec.md`
-
-**Skip:** transport row (sibling), digits (sibling), driver icon art, per-brand layouts.
-
----
-
-## back-off-buttons-look-disabled — Back and Off buttons look disabled
-_bug · diagnosed · horizon: now_
-
-Back and Off render greyed and read as disabled. They work — `mutedLook` is doing double duty.
-
-**Status:** diagnosed — root cause found in `Panel.qml`, fix not written.
-
-**Pick up at:** `/deliver back-off-buttons-look-disabled` — split `mutedLook` into de-emphasis vs non-interactive, add the token to the Halo palette rather than hardcoding it.
-
-→ `/deliver back-off-buttons-look-disabled`
-
-**Files:** `Panel.qml`, `.hero/knowledge/conventions/halo-remote-panel-style/spec.md`
-
-**Skip:** making Off reflect room power state (`room-now-playing`); repainting the panel palette (`halo-panel-chrome`); the browse navigation model.

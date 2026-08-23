@@ -11,6 +11,7 @@ horizon: now
 relates-to:
   - watch-source-virtual-remote
   - multi-room-audio
+  - room-environment
 child:
   - plugin-scaffold
   - director-session
@@ -52,6 +53,7 @@ Scoped 2026-08-23, after Watch/Listen and library browse shipped. Both are sibli
 
 - **`watch-source-virtual-remote`** — Watch currently selects a source and stops. That initiative renders each device's own remote (D-pad, transport, digits) from the `commands[]` and `navigator_display_option` metadata the Director already publishes in `GET /api/v1/items`.
 - **`multi-room-audio`** — this initiative's deliberate one-room scope, revisited. Adds rooms to what is playing and shows per-room volume, built on `/api/v1/media_sessions`.
+- **`room-environment`** — lights / climate / shades / scenes, which this house does not have. Sibling so V1 stays an AV remote. First child (`experience-switch`) opens the Halo mode row so those doors can register later without rewriting Watch/Listen.
 
 ## Specs
 
@@ -67,7 +69,7 @@ Ordered children. Sizes and depends-on are locked for this compose; `/design` re
 | 4b | `listen-library-browse` | planning | medium | now | `watch-and-listen` | After Listen → Apple Music, pick playlists/songs (blocked on a Director list API). |
 | 5 | `room-volume-mute-off` | delivering | small | next | `focused-room` | Volume up/down, mute toggle, room off — button chrome, not a mixer. |
 | 5b | `halo-panel-chrome` | planning | small | now | `watch-and-listen` | Recolor the popup to Halo Remote tokens and layout. |
-| 6 | `room-now-playing` | planning | small | next | `focused-room` | Poll power/volume/mute/source; show on chip and panel header. |
+| 6 | `room-now-playing` | planning | small | now | `focused-room` | Chip is the Control4 mark (on/off); panel + tooltip name the source. Designed. |
 
 ## Sequenced work items
 
@@ -169,11 +171,9 @@ Volume and now-playing **are** in this initiative as children 5–6. They are ou
 
 ## Progress
 
-`plugin-scaffold` and `director-session` delivered. Live copy at `~/.config/omarchy/plugins/io.github.davydotcom.control4/`. `focused-room` design just landed (rooms = ui_configuration watch/listen join items; persist `focus.json`).
+All children through Halo chrome and Watch/Listen have shipped. Live copy at `~/.config/omarchy/plugins/io.github.davydotcom.control4/`. `room-now-playing` is designed — last open child.
 
-**Next:** `/deliver focused-room`
-
-Then: `/design watch-and-listen`. Children 5–6 stay `horizon: next` until Watch/Listen is designed (and preferably delivered).
+**Next:** `/deliver room-now-playing`
 
 ## Acceptance Criteria
 

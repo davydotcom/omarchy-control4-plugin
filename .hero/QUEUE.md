@@ -6,22 +6,22 @@
 
 # Hero Ready Queue
 
-_Generated: 2026-08-23T12:25:41Z · 2 ready specs_
+_Generated: 2026-08-23T12:33:20Z · 3 ready specs_
 
-## focused-room — Focused room
+## watch-and-listen — Watch and Listen
 _feature · delivering · horizon: now_
 
-Pick one Control4 room, persist it, show the name on the bar chip.
+One Watch/Listen source picker on the focused room; filter and command change, UI does not.
 
-**Status:** delivering — room list, `focus.json`, and chip name are live (Deck). Login form now behind `credentials-gear`. Composer gone-id / empty-list / single-room auto-select were not live-tapped.
+**Status:** delivering — Deck listen-only auto-flips to Listen; Amazon Music / Apple Music / etc. listed live. Source tap not CLI-clicked.
 
-**Pick up at:** close-out — ledger the live chip, then `/deliver credentials-gear` if the form is still showing.
+**Pick up at:** tap a Listen source, then Watch on a video room; `hero spec verify` after live POST.
 
-→ `/deliver credentials-gear`
+→ `/deliver watch-and-listen`
 
-**Files:** `Panel.qml`, `Service.qml`, `BarWidget.qml`
+**Files:** `DirectorClient.js`, `Service.qml`, `Panel.qml`, `tests/director-client.test.js`
 
-**Skip:** `/locations/rooms/.../audio_devices`; new HTTP client; Watch/Listen/volume; floor tree; password in `shell.json`; OS 4.2 workaround.
+**Skip:** two pickers; `audio_devices`; volume/mute/off; now-playing; cameras; transport.
 
 ---
 
@@ -31,3 +31,20 @@ _initiative · planning · horizon: now_
 _Run opener — arm with `/drive control4-focused-room-remote`_
 
 Ship a third-party Omarchy plugin that authenticates to a local Control4 Director, keeps one room in focus, and lets the user Watch, Listen, adjust volume, mute, and turn that room off — with now-playing reflected on the chip and panel. Success is a working bar-widget on OS 3.x local REST with a cloud-issued director JWT, not feature parity with Composer or the Control4 app.
+
+---
+
+## room-now-playing — Room now playing
+_feature · planning · horizon: next_
+
+Poll focused-room power, volume/mute, and source; show now-playing on the chip and panel header.
+
+**Status:** planning — compose stub; `horizon: next`. Do not design until Watch/Listen is designed.
+
+**Pick up at:** run `/design room-now-playing` after `/design watch-and-listen`. Do not implement from this stub.
+
+→ `/design room-now-playing`
+
+**Files:** `.hero/planning/features/room-now-playing/spec.md`, `.hero/planning/initiatives/control4-focused-room-remote/spec.md`
+
+**Skip:** shipping before Watch/Listen; lights/climate metadata; websocket-only designs unless `/design` proves REST poll is insufficient.

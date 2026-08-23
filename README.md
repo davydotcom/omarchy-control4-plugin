@@ -85,6 +85,8 @@ omarchy plugin validate "$HOME/.config/omarchy/plugins/io.github.davydotcom.cont
 - First run: enter controller IP, email, and password, then Connect
 - After that the panel is the room list; use the header gear to change login
 - When connected, pick a room in the panel; the chip shows that name
+- Watch / Listen lists sources for that room; tap one to select it
+- − / Mute / + pulse volume; Off turns the room off
 - Press Escape to close the panel
 
 ## Remove

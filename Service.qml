@@ -27,6 +27,11 @@ Item {
   property var focusedRoomId: null
   property string focusedRoomName: ""
   property string roomsHint: ""
+  property string sourceMode: "watch"
+  property var sources: []
+  property string sourcesHint: ""
+  property var _uiConfig: null
+  property var _items: null
 
   property string _accountToken: ""
   property string _directorToken: ""
@@ -78,6 +83,10 @@ Item {
     _refreshing = false
     authFailedKind = ""
     lastError = ""
+    _uiConfig = null
+    _items = null
+    sources = []
+    sourcesHint = ""
     _setState("unconfigured")
   }
 
@@ -163,6 +172,81 @@ Item {
     focusedRoomName = match.name
     roomsHint = ""
     persistFocus(match.id)
+    _rebuildSources(true)
+  }
+
+  function setSourceMode(mode) {
+    if (mode !== "watch" && mode !== "listen")
+      return
+    if (sourceMode === mode)
+      return
+    sourceMode = mode
+    _rebuildSources(false)
+  }
+
+  function selectSource(id) {
+    if (sessionState !== "connected" || focusedRoomId === null || focusedRoomId === undefined)
+      return
+    var n = Number(id)
+    if (!isFinite(n))
+      return
+    var list = sources
+    var found = false
+    if (list && list.length) {
+      for (var i = 0; i < list.length; i++) {
+        if (Number(list[i].id) === n) {
+          found = true
+          break
+        }
+      }
+    }
+    if (!found)
+      return
+    var command = sourceMode === "listen" ? "SELECT_AUDIO_DEVICE" : "SELECT_VIDEO_DEVICE"
+    directorPost("/api/v1/items/" + focusedRoomId + "/commands", command, { deviceid: n }, function() {})
+  }
+
+  function pulseVolumeUp() {
+    _roomCommand("PULSE_VOL_UP")
+  }
+
+  function pulseVolumeDown() {
+    _roomCommand("PULSE_VOL_DOWN")
+  }
+
+  function toggleMute() {
+    _roomCommand("MUTE_TOGGLE")
+  }
+
+  function roomOff() {
+    _roomCommand("ROOM_OFF")
+  }
+
+  function _roomCommand(command) {
+    if (sessionState !== "connected" || focusedRoomId === null || focusedRoomId === undefined)
+      return
+    directorPost("/api/v1/items/" + focusedRoomId + "/commands", command, {}, function() {})
+  }
+
+  function _rebuildSources(allowFlip) {
+    if (sessionState !== "connected" || focusedRoomId === null || focusedRoomId === undefined) {
+      sources = []
+      sourcesHint = ""
+      return
+    }
+    sources = DirectorClient.extractSources(_uiConfig, _items, focusedRoomId, sourceMode)
+    if ((!sources || !sources.length) && allowFlip) {
+      var other = sourceMode === "listen" ? "watch" : "listen"
+      var alt = DirectorClient.extractSources(_uiConfig, _items, focusedRoomId, other)
+      if (alt && alt.length) {
+        sourceMode = other
+        sources = alt
+      }
+    }
+    if (sources && sources.length)
+      sourcesHint = ""
+    else
+      sourcesHint = sourceMode === "listen" ? "No listen sources" : "No watch sources"
   }
 
   function refreshRooms() {
@@ -198,6 +282,8 @@ Item {
         } catch (e2) {
           return
         }
+        root._uiConfig = uiConfig
+        root._items = items
         root._applyRooms(DirectorClient.extractRooms(uiConfig, items))
       })
     })
@@ -258,33 +344,27 @@ Item {
       focusedRoomName = ""
       roomsHint = "No rooms"
       persistFocus(null)
-      return
+    } else {
+      var match = _roomById(focusedRoomId)
+      if (match) {
+        focusedRoomId = match.id
+        focusedRoomName = match.name
+        roomsHint = ""
+      } else if (focusedRoomId !== null && focusedRoomId !== undefined) {
+        focusedRoomId = null
+        focusedRoomName = ""
+        roomsHint = "Saved room is gone. Pick a room."
+        persistFocus(null)
+      } else if (visible.length === 1) {
+        setFocusedRoom(visible[0].id)
+        return
+      } else {
+        focusedRoomId = null
+        focusedRoomName = ""
+        roomsHint = ""
+      }
     }
-
-    var match = _roomById(focusedRoomId)
-    if (match) {
-      focusedRoomId = match.id
-      focusedRoomName = match.name
-      roomsHint = ""
-      return
-    }
-
-    if (focusedRoomId !== null && focusedRoomId !== undefined) {
-      focusedRoomId = null
-      focusedRoomName = ""
-      roomsHint = "Saved room is gone. Pick a room."
-      persistFocus(null)
-      return
-    }
-
-    if (visible.length === 1) {
-      setFocusedRoom(visible[0].id)
-      return
-    }
-
-    focusedRoomId = null
-    focusedRoomName = ""
-    roomsHint = ""
+    _rebuildSources(true)
   }
 
   function _refreshStatusText() {

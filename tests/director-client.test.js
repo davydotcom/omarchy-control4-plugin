@@ -14,7 +14,8 @@ const {
   normalizeHost, credentialsComplete, statusTextFor, accountAuthBody,
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
   STATUS_SIGN_IN_FAILED, STATUS_DIRECTOR_401, STATUS_CONNECTED,
-  extractRooms, isRoomHidden, parseFocusFile, sortRoomsByNameThenId
+  extractRooms, isRoomHidden, parseFocusFile, sortRoomsByNameThenId,
+  extractSources, sourceArray
 } = ctx
 
 function assert(cond, msg) {
@@ -192,5 +193,50 @@ assert(parseFocusFile("") === null, "parseFocusFile empty")
 assert(parseFocusFile('{"roomId":null}') === null, "parseFocusFile null roomId")
 assert(parseFocusFile('{"roomId":"x"}') === null, "parseFocusFile non-finite")
 assert(parseFocusFile("not json") === null, "parseFocusFile garbage")
+
+const srcUi = {
+  experiences: [
+    {
+      type: "watch",
+      room_id: 9,
+      sources: { source: [
+        { id: 59, type: "HDMI" },
+        { id: 33, type: "VIDEO_SELECTION", name: "Apple TV" },
+        { id: 1, type: "HDMI", name: "   " }
+      ] }
+    },
+    {
+      type: "listen",
+      room_id: 9,
+      sources: { source: [
+        { id: 298, type: "DIGITAL_AUDIO_SERVER", name: "My Music" },
+        { id: 937, name: "Spotify Connect" }
+      ] }
+    },
+    {
+      type: "watch",
+      room_id: 8,
+      sources: { source: { id: 77, name: "Other Room TV" } }
+    }
+  ]
+}
+const srcItems = [
+  { id: 59, name: "Cable Box" },
+  { id: 1, name: "Blank HDMI" },
+  { id: 298, name: "Should not win" }
+]
+const watch9 = extractSources(srcUi, srcItems, 9, "watch")
+assert(watch9.map(s => s.id + ":" + s.name).join(",") === "33:Apple TV,1:Blank HDMI,59:Cable Box", "watch names join items; whitespace source name falls back")
+const listen9 = extractSources(srcUi, srcItems, 9, "listen")
+assert(listen9.map(s => s.id + ":" + s.name).join(",") === "298:My Music,937:Spotify Connect", "listen filter; source.name wins")
+assert(extractSources(srcUi, srcItems, 8, "watch").length === 1
+  && extractSources(srcUi, srcItems, 8, "watch")[0].name === "Other Room TV", "single-object source")
+assert(extractSources(srcUi, srcItems, 9, "listen").every(s => s.id !== 59), "watch HDMI not in listen")
+assert(extractSources(srcUi, srcItems, 99, "watch").length === 0, "other room skipped")
+assert(extractSources({}, srcItems, 9, "watch").length === 0, "missing experiences sources")
+assert(extractSources({ experiences: [{ type: "watch", room_id: 9 }] }, srcItems, 9, "watch").length === 0, "missing sources")
+assert(sourceArray({ sources: { source: { id: 1 } } }).length === 1, "sourceArray wraps object")
+assert(sourceArray({ sources: { source: [{ id: 1 }, { id: 2 }] } }).length === 2, "sourceArray array")
+assert(extractSources(srcUi, srcItems, 9, "nope").map(s => s.id).join(",") === "33,1,59", "unknown mode is watch")
 
 console.log("ok")

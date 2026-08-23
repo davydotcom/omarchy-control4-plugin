@@ -22,6 +22,12 @@ Panel {
   readonly property bool authFailed: session && session.sessionState === "auth-failed"
   readonly property string roomsHint: session ? String(session.roomsHint || "") : ""
   readonly property bool showLoginForm: !configured || settingsOpen || authFailed
+  readonly property bool hasFocusedRoom: connected
+    && session
+    && session.focusedRoomId !== null
+    && session.focusedRoomId !== undefined
+  readonly property string sourcesHint: session ? String(session.sourcesHint || "") : ""
+  readonly property string sourceMode: session && session.sourceMode ? String(session.sourceMode) : "watch"
 
   property bool settingsOpen: false
 
@@ -236,6 +242,96 @@ Panel {
               onClicked: if (root.session) root.session.setFocusedRoom(modelData.id)
             }
           }
+        }
+
+        ButtonGroup {
+          visible: root.hasFocusedRoom
+          width: parent.width
+          height: visible ? implicitHeight : 0
+          options: [
+            { value: "watch", label: "Watch" },
+            { value: "listen", label: "Listen" }
+          ]
+          value: root.sourceMode
+          foreground: root.barForeground
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          onChanged: function(v) {
+            if (root.session)
+              root.session.setSourceMode(v)
+          }
+        }
+
+        Text {
+          visible: root.hasFocusedRoom && root.sourcesHint !== ""
+          width: parent.width
+          height: visible ? implicitHeight : 0
+          text: root.sourcesHint
+          color: root.barForeground
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.body
+          wrapMode: Text.WordWrap
+        }
+
+        Column {
+          id: sourcesColumn
+          visible: root.hasFocusedRoom
+          width: parent.width
+          spacing: Style.space(4)
+          height: visible ? implicitHeight : 0
+
+          Repeater {
+            model: root.session && root.session.sources ? root.session.sources : []
+
+            Button {
+              width: sourcesColumn.width
+              text: modelData && modelData.name ? String(modelData.name) : ""
+              foreground: root.barForeground
+              leftAlign: true
+              onClicked: if (root.session) root.session.selectSource(modelData.id)
+            }
+          }
+        }
+
+        Row {
+          id: volumeRow
+          visible: root.hasFocusedRoom
+          width: parent.width
+          spacing: Style.space(8)
+          height: visible ? implicitHeight : 0
+
+          Button {
+            width: (volumeRow.width - volumeRow.spacing * 2) / 3
+            text: "−"
+            foreground: root.barForeground
+            bordered: true
+            onClicked: if (root.session) root.session.pulseVolumeDown()
+          }
+
+          Button {
+            width: (volumeRow.width - volumeRow.spacing * 2) / 3
+            text: "Mute"
+            foreground: root.barForeground
+            bordered: true
+            onClicked: if (root.session) root.session.toggleMute()
+          }
+
+          Button {
+            width: (volumeRow.width - volumeRow.spacing * 2) / 3
+            text: "+"
+            foreground: root.barForeground
+            bordered: true
+            onClicked: if (root.session) root.session.pulseVolumeUp()
+          }
+        }
+
+        Button {
+          visible: root.hasFocusedRoom
+          width: parent.width
+          height: visible ? implicitHeight : 0
+          text: "Off"
+          foreground: root.barForeground
+          bordered: true
+          onClicked: if (root.session) root.session.roomOff()
         }
       }
     }

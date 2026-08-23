@@ -279,3 +279,64 @@ function extractRooms(uiConfig, items) {
   out.sort(sortRoomsByNameThenId)
   return out
 }
+
+function sourceArray(exp) {
+  if (!exp || !exp.sources)
+    return []
+  var s = exp.sources.source
+  if (Array.isArray(s))
+    return s
+  if (s && typeof s === "object")
+    return [s]
+  return []
+}
+
+function extractSources(uiConfig, items, roomId, mode) {
+  var type = mode === "listen" ? "listen" : "watch"
+  var rid = Number(roomId)
+  if (!isFinite(rid))
+    return []
+  var experiences = uiConfig && uiConfig.experiences
+  if (!Array.isArray(experiences))
+    return []
+  var itemList = Array.isArray(items) ? items : []
+  var namesById = {}
+  for (var i = 0; i < itemList.length; i++) {
+    var item = itemList[i]
+    if (!item)
+      continue
+    var iid = Number(item.id)
+    if (!isFinite(iid))
+      continue
+    var itemName = item.name !== undefined && item.name !== null ? String(item.name).trim() : ""
+    if (itemName)
+      namesById[iid] = itemName
+  }
+  var seen = {}
+  var out = []
+  for (var j = 0; j < experiences.length; j++) {
+    var exp = experiences[j]
+    if (!exp || exp.type !== type)
+      continue
+    if (Number(exp.room_id) !== rid)
+      continue
+    var srcs = sourceArray(exp)
+    for (var k = 0; k < srcs.length; k++) {
+      var src = srcs[k]
+      if (!src)
+        continue
+      var id = Number(src.id)
+      if (!isFinite(id) || seen[id])
+        continue
+      var name = src.name !== undefined && src.name !== null ? String(src.name).trim() : ""
+      if (!name)
+        name = namesById[id] || ""
+      if (!name)
+        continue
+      seen[id] = true
+      out.push({ id: id, name: name })
+    }
+  }
+  out.sort(sortRoomsByNameThenId)
+  return out
+}

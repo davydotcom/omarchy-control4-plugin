@@ -244,6 +244,11 @@ const vol = parseRoomVolume(JSON.stringify([
   { name: "IS_MUTED", value: "1" }
 ]))
 assert(vol.volume === 42 && vol.muted === true, "parseRoomVolume muted")
+const liveDeck = parseRoomVolume(JSON.stringify([
+  { id: 15, varName: "CURRENT_VOLUME", type: "Number", value: 32, name: "Deck", roomName: "Deck" },
+  { id: 15, varName: "IS_MUTED", type: "Boolean", value: 0, name: "Deck", roomName: "Deck" }
+]))
+assert(liveDeck.volume === 32 && liveDeck.muted === false, "parseRoomVolume Director varName not item name")
 const vol2 = parseRoomVolume(JSON.stringify([{ name: "CURRENT_VOLUME", value: 7 }]))
 assert(vol2.volume === 7 && vol2.muted === false, "parseRoomVolume unmuted missing IS_MUTED")
 assert(parseRoomVolume("{}").volume === null, "parseRoomVolume non-array")

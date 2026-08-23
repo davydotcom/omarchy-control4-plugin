@@ -352,13 +352,13 @@ function parseRoomVolume(raw) {
       var row = list[i]
       if (!row)
         continue
-      var name = String(row.name || "")
-      if (name === "CURRENT_VOLUME") {
+      var key = String(row.varName || row.name || "")
+      if (key === "CURRENT_VOLUME") {
         var n = Number(row.value)
         if (isFinite(n))
           volume = Math.max(0, Math.min(100, Math.round(n)))
       }
-      if (name === "IS_MUTED") {
+      if (key === "IS_MUTED") {
         var v = row.value
         muted = v === true || v === "true" || v === "1" || v === 1
       }

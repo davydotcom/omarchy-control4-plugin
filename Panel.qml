@@ -17,6 +17,13 @@ Panel {
   readonly property var barIdentity: hostWidget || root
   readonly property string sessionStatus: session ? String(session.statusText || "") : "Not configured"
   readonly property bool connecting: session && session.sessionState === "connecting"
+  readonly property bool connected: session && session.sessionState === "connected"
+  readonly property bool configured: session && session.configured === true
+  readonly property bool authFailed: session && session.sessionState === "auth-failed"
+  readonly property string roomsHint: session ? String(session.roomsHint || "") : ""
+  readonly property bool showLoginForm: !configured || settingsOpen || authFailed
+
+  property bool settingsOpen: false
 
   function resolveSession() {
     var sh = root.bar && root.bar.shell
@@ -67,9 +74,14 @@ Panel {
 
   onBarChanged: resolveSession()
   onSessionChanged: syncFormFromSession()
-  onOpenedChanged: if (opened) {
-    resolveSession()
-    syncFormFromSession()
+  onConnectedChanged: if (connected) settingsOpen = false
+  onOpenedChanged: {
+    if (opened) {
+      resolveSession()
+      syncFormFromSession()
+    } else {
+      settingsOpen = false
+    }
   }
 
   Timer {
@@ -100,14 +112,38 @@ Panel {
         width: parent.width
         spacing: Style.space(8)
 
-        Text {
+        Row {
+          id: headerRow
           width: parent.width
-          text: "Control4"
-          color: root.barForeground
-          font.family: root.bar ? root.bar.fontFamily : Style.font.family
-          font.pixelSize: Style.font.subtitle
-          font.bold: true
-          wrapMode: Text.WordWrap
+          spacing: Style.space(8)
+          height: Math.max(titleLabel.implicitHeight, gearButton.visible ? gearButton.height : 0)
+
+          Text {
+            id: titleLabel
+            width: parent.width - (gearButton.visible ? gearButton.width + headerRow.spacing : 0)
+            height: implicitHeight
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Control4"
+            color: root.barForeground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.subtitle
+            font.bold: true
+            wrapMode: Text.WordWrap
+          }
+
+          PanelActionButton {
+            id: gearButton
+            visible: root.configured
+            width: gearButton.visible ? gearButton.implicitWidth : 0
+            height: gearButton.visible ? gearButton.implicitHeight : 0
+            anchors.verticalCenter: parent.verticalCenter
+            iconText: "󰒓"
+            tooltipText: root.settingsOpen ? "Hide login" : "Change login"
+            foreground: root.barForeground
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+            bordered: root.settingsOpen
+            onClicked: root.settingsOpen = !root.settingsOpen
+          }
         }
 
         Text {
@@ -119,46 +155,87 @@ Panel {
           wrapMode: Text.WordWrap
         }
 
-        TextField {
-          id: ipField
+        Column {
+          id: loginForm
+          visible: root.showLoginForm
           width: parent.width
-          enabled: !root.connecting
-          placeholderText: "Controller IP"
-          foreground: root.barForeground
-          font.family: root.bar ? root.bar.fontFamily : Style.font.family
-          Keys.onReturnPressed: root.submitConnect()
-          Keys.onEnterPressed: root.submitConnect()
+          spacing: Style.space(8)
+          height: loginForm.visible ? loginForm.implicitHeight : 0
+
+          TextField {
+            id: ipField
+            width: parent.width
+            enabled: !root.connecting
+            placeholderText: "Controller IP"
+            foreground: root.barForeground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            Keys.onReturnPressed: root.submitConnect()
+            Keys.onEnterPressed: root.submitConnect()
+          }
+
+          TextField {
+            id: emailField
+            width: parent.width
+            enabled: !root.connecting
+            placeholderText: "Email"
+            foreground: root.barForeground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            Keys.onReturnPressed: root.submitConnect()
+            Keys.onEnterPressed: root.submitConnect()
+          }
+
+          TextField {
+            id: passwordField
+            width: parent.width
+            enabled: !root.connecting
+            placeholderText: "Password"
+            password: true
+            foreground: root.barForeground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            Keys.onReturnPressed: root.submitConnect()
+            Keys.onEnterPressed: root.submitConnect()
+          }
+
+          Button {
+            text: "Connect"
+            foreground: root.barForeground
+            bordered: true
+            enabled: !root.connecting
+            onClicked: root.submitConnect()
+          }
         }
 
-        TextField {
-          id: emailField
+        Text {
+          visible: root.connected && root.roomsHint !== ""
           width: parent.width
-          enabled: !root.connecting
-          placeholderText: "Email"
-          foreground: root.barForeground
+          text: root.roomsHint
+          color: root.barForeground
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
-          Keys.onReturnPressed: root.submitConnect()
-          Keys.onEnterPressed: root.submitConnect()
+          font.pixelSize: Style.font.body
+          wrapMode: Text.WordWrap
         }
 
-        TextField {
-          id: passwordField
+        Column {
+          id: roomsColumn
+          visible: root.connected
           width: parent.width
-          enabled: !root.connecting
-          placeholderText: "Password"
-          password: true
-          foreground: root.barForeground
-          font.family: root.bar ? root.bar.fontFamily : Style.font.family
-          Keys.onReturnPressed: root.submitConnect()
-          Keys.onEnterPressed: root.submitConnect()
-        }
+          spacing: Style.space(4)
 
-        Button {
-          text: "Connect"
-          foreground: root.barForeground
-          bordered: true
-          enabled: !root.connecting
-          onClicked: root.submitConnect()
+          Repeater {
+            model: root.session && root.session.rooms ? root.session.rooms : []
+
+            Button {
+              width: roomsColumn.width
+              text: modelData && modelData.name ? String(modelData.name) : ""
+              selected: root.session
+                && root.session.focusedRoomId !== null
+                && root.session.focusedRoomId !== undefined
+                && Number(root.session.focusedRoomId) === Number(modelData.id)
+              foreground: root.barForeground
+              leftAlign: true
+              onClicked: if (root.session) root.session.setFocusedRoom(modelData.id)
+            }
+          }
         }
       }
     }

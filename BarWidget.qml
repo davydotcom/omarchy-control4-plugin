@@ -9,6 +9,15 @@ BarWidget {
   property var session: null
 
   readonly property string sessionStatus: session ? String(session.statusText || "") : ""
+  readonly property bool hasFocusedRoom: session
+    && session.sessionState === "connected"
+    && String(session.focusedRoomName || "").length > 0
+  readonly property string chipText: hasFocusedRoom ? String(session.focusedRoomName) : "C4"
+  readonly property string chipTooltip: {
+    if (hasFocusedRoom)
+      return chipText + (sessionStatus !== "" ? (" — " + sessionStatus) : "")
+    return sessionStatus !== "" ? ("Control4 — " + sessionStatus) : "Control4"
+  }
 
   function resolveSession() {
     var sh = root.bar && root.bar.shell
@@ -88,8 +97,37 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "C4"
-    tooltipText: root.sessionStatus !== "" ? ("Control4 — " + root.sessionStatus) : "Control4"
+    text: root.chipText
+    labelVisible: false
+    tooltipText: root.chipTooltip
+    fixedWidth: root.vertical ? -1 : Math.max(12, chipClip.width + button.scaledHorizontalMargin * 2)
+
+    Item {
+      id: chipClip
+      enabled: false
+      anchors.centerIn: parent
+      width: {
+        var cap = Style.space(140)
+        if (root.vertical && parent.width > 0)
+          cap = Math.min(cap, parent.width)
+        return Math.min(cap, chipLabel.implicitWidth)
+      }
+      height: chipLabel.implicitHeight
+      clip: true
+
+      Text {
+        id: chipLabel
+        width: parent.width
+        text: root.chipText
+        elide: Text.ElideRight
+        color: button.foreground
+        font.family: button.fontFamily
+        font.pixelSize: button.fontSize
+        renderType: Text.NativeRendering
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
+      }
+    }
 
     onPressed: function(b) {
       if (b === Qt.RightButton) return

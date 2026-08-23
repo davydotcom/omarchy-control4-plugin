@@ -5,22 +5,25 @@ Project shape: see [SNAPSHOT.md](.hero/SNAPSHOT.md).
 <!-- hero:managed-end -->
 
 ---
-updated: 2026-08-23T02:30:19Z
-repo: omarchy-control4-plugin
-branch: HEAD
+updated: 2026-08-23T12:08:55Z
+repo: davydotcom/omarchy-control4-plugin
 ---
 
 ## Just finished
 
-Nothing yet.
+Run `git log --oneline -10` for recent commits.
 
 ## Next
 
-No open features in this repo.
+- **Focused room** (`focused-room`, planning)
+
+→ `/deliver focused-room`
 
 ## Blocked on
 
-Nothing.
+- **room-now-playing** ← waiting on `focused-room` (planning)
+- **room-volume-mute-off** ← waiting on `focused-room` (planning)
+- **watch-and-listen** ← waiting on `focused-room` (planning)
 
 ## Tried and failed
 
@@ -28,5 +31,8 @@ Nothing this session.
 
 ## Context to carry forward
 
-Nothing pinned.
+- Control4 focused-room remote — `control4-focused-room-remote`
+- In-process Director REST — `in-process-director-rest`
+- Plugin ID from day one — `plugin-id-from-day-one`
+- Rooms from ui_configuration joined to items — `rooms-from-ui-config-join-items`
 

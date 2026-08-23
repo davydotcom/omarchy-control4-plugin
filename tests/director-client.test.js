@@ -13,7 +13,8 @@ const {
   classifyProbe, classifyCloudStatus, commandBody, curlArgs, withAuthHeader,
   normalizeHost, credentialsComplete, statusTextFor, accountAuthBody,
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
-  STATUS_SIGN_IN_FAILED, STATUS_DIRECTOR_401, STATUS_CONNECTED
+  STATUS_SIGN_IN_FAILED, STATUS_DIRECTOR_401, STATUS_CONNECTED,
+  extractRooms, isRoomHidden, parseFocusFile, sortRoomsByNameThenId
 } = ctx
 
 function assert(cond, msg) {
@@ -84,5 +85,112 @@ assert(statusTextFor("connected", "", "", true, true) === STATUS_CONNECTED, "con
 const authBody = JSON.parse(accountAuthBody("user@example.com", "s3cret"))
 assert(authBody.clientInfo.userInfo.userName === "user@example.com", "account body email")
 assert(authBody.clientInfo.userInfo.applicationKey === APPLICATION_KEY, "application key")
+
+assert(isRoomHidden(true) === true, "hidden boolean true")
+assert(isRoomHidden("1") === true, "hidden string 1")
+assert(isRoomHidden(1) === true, "hidden number 1")
+assert(isRoomHidden(undefined) === false, "missing roomHidden visible")
+assert(isRoomHidden(false) === false, "hidden false visible")
+assert(isRoomHidden(0) === false, "hidden 0 visible")
+assert(isRoomHidden("0") === false, "hidden string 0 visible")
+
+function roomItem(id, name, hidden) {
+  const item = { id, typeName: "room", name }
+  if (hidden !== undefined)
+    item.roomHidden = hidden
+  return item
+}
+
+const hiddenItems = [
+  roomItem(1, "HiddenBool", true),
+  roomItem(2, "HiddenStr", "1"),
+  roomItem(3, "HiddenNum", 1),
+  roomItem(4, "Kitchen")
+]
+const hiddenUi = {
+  experiences: [
+    { type: "watch", room_id: 1 },
+    { type: "listen", room_id: 2 },
+    { type: "watch", room_id: 3 },
+    { type: "listen", room_id: 4 }
+  ]
+}
+const visible = extractRooms(hiddenUi, hiddenItems)
+assert(visible.length === 1 && visible[0].id === 4 && visible[0].name === "Kitchen", "hidden rooms skipped")
+
+const camerasUi = {
+  experiences: [
+    { type: "cameras", room_id: 10 },
+    { type: "comfort", room_id: 11 },
+    { type: "lights", room_id: 12 }
+  ]
+}
+const camerasItems = [
+  roomItem(10, "Cameras"),
+  roomItem(11, "Thermostat"),
+  roomItem(12, "Hall")
+]
+assert(extractRooms(camerasUi, camerasItems).length === 0, "cameras-only and other types skipped")
+
+const joinUi = {
+  experiences: [
+    { type: "watch", room_id: 9 },
+    { type: "listen", room_id: 9 },
+    { type: "watch", room_id: 99 },
+    { type: "listen", room_id: "8" }
+  ]
+}
+const joinItems = [
+  roomItem("9", "Theater"),
+  roomItem(8, "Kitchen"),
+  { id: 7, typeName: "device", name: "Amp" }
+]
+const joined = extractRooms(joinUi, joinItems)
+assert(joined.length === 2, "watch+listen same room is one row; unmatched omitted")
+assert(joined[0].id === 8 && joined[0].name === "Kitchen", "name join from items")
+assert(joined[1].id === 9 && joined[1].name === "Theater", "watch+listen deduped")
+assert(joined.every(r => r.id !== 99 && r.name !== "Room 99"), "gone id 99 not synthesized")
+
+const sortUi = {
+  experiences: [
+    { type: "watch", room_id: 1 },
+    { type: "listen", room_id: 5 },
+    { type: "watch", room_id: 3 }
+  ]
+}
+const sortItems = [
+  roomItem(1, "Living Room"),
+  roomItem(5, "Kitchen"),
+  roomItem(3, "Kitchen")
+]
+const sorted = extractRooms(sortUi, sortItems)
+assert(sorted.map(r => r.id + ":" + r.name).join(",") === "3:Kitchen,5:Kitchen,1:Living Room", "sort by name then id")
+assert(sortRoomsByNameThenId(sorted[0], sorted[1]) < 0, "name-then-id helper")
+
+assert(extractRooms({}, [roomItem(1, "A")]).length === 0, "missing experiences")
+assert(extractRooms({ experiences: null }, [roomItem(1, "A")]).length === 0, "non-array experiences")
+assert(extractRooms({ experiences: { room_id: 1 } }, [roomItem(1, "A")]).length === 0, "object experiences")
+assert(extractRooms({ experiences: [{ type: "watch", room_id: 1 }] }, { id: 1 }).length === 0, "non-array items")
+assert(extractRooms({ experiences: [{ type: "watch", room_id: 1 }] }, null).length === 0, "null items")
+
+const missingHidden = extractRooms(
+  { experiences: [{ type: "watch", room_id: 4 }] },
+  [roomItem(4, "Den")]
+)
+assert(missingHidden.length === 1 && missingHidden[0].name === "Den", "missing roomHidden is visible")
+
+assert(extractRooms(
+  { experiences: [{ type: "watch", room_id: 6 }] },
+  [roomItem(6, "   ")]
+).length === 0, "blank name skipped")
+
+assert(parseFocusFile('{"roomId":9}') === 9, "parseFocusFile number")
+assert(parseFocusFile('{"roomId": 9}') === 9, "parseFocusFile spaced number")
+assert(parseFocusFile("{}") === null, "parseFocusFile empty object")
+assert(parseFocusFile("{") === null, "parseFocusFile invalid json")
+assert(parseFocusFile("") === null, "parseFocusFile empty")
+assert(parseFocusFile('{"roomId":null}') === null, "parseFocusFile null roomId")
+assert(parseFocusFile('{"roomId":"x"}') === null, "parseFocusFile non-finite")
+assert(parseFocusFile("not json") === null, "parseFocusFile garbage")
 
 console.log("ok")

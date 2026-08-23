@@ -194,3 +194,88 @@ function directorUrl(host, path) {
     p = "/" + p
   return "https://" + normalizeHost(host) + p
 }
+
+function isRoomHidden(value) {
+  return value === true || value === "1" || value === 1
+}
+
+function sortRoomsByNameThenId(a, b) {
+  var an = String(a && a.name != null ? a.name : "")
+  var bn = String(b && b.name != null ? b.name : "")
+  var cmp = an.localeCompare(bn)
+  if (cmp !== 0)
+    return cmp
+  var aid = Number(a && a.id)
+  var bid = Number(b && b.id)
+  if (!isFinite(aid))
+    aid = 0
+  if (!isFinite(bid))
+    bid = 0
+  return aid - bid
+}
+
+function parseFocusFile(raw) {
+  try {
+    var text = String(raw || "").trim()
+    if (!text)
+      return null
+    var json = JSON.parse(text)
+    if (!json || typeof json !== "object" || Array.isArray(json))
+      return null
+    if (json.roomId === undefined || json.roomId === null || json.roomId === "")
+      return null
+    if (typeof json.roomId !== "number" && typeof json.roomId !== "string")
+      return null
+    var id = Number(json.roomId)
+    if (!isFinite(id))
+      return null
+    return id
+  } catch (e) {
+    return null
+  }
+}
+
+function extractRooms(uiConfig, items) {
+  var experiences = uiConfig && uiConfig.experiences
+  if (!Array.isArray(experiences))
+    return []
+  var itemList = Array.isArray(items) ? items : []
+
+  var roomsById = {}
+  for (var i = 0; i < itemList.length; i++) {
+    var item = itemList[i]
+    if (!item || item.typeName !== "room")
+      continue
+    var itemId = Number(item.id)
+    if (!isFinite(itemId))
+      continue
+    roomsById[itemId] = item
+  }
+
+  var seen = {}
+  var out = []
+  for (var j = 0; j < experiences.length; j++) {
+    var exp = experiences[j]
+    if (!exp)
+      continue
+    if (exp.type !== "watch" && exp.type !== "listen")
+      continue
+    var roomId = Number(exp.room_id)
+    if (!isFinite(roomId))
+      continue
+    if (seen[roomId])
+      continue
+    seen[roomId] = true
+    var room = roomsById[roomId]
+    if (!room)
+      continue
+    if (isRoomHidden(room.roomHidden))
+      continue
+    var name = room.name !== undefined && room.name !== null ? String(room.name).trim() : ""
+    if (!name)
+      continue
+    out.push({ id: roomId, name: name })
+  }
+  out.sort(sortRoomsByNameThenId)
+  return out
+}

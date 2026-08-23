@@ -1,18 +1,18 @@
 ---
 user: david-estes
-updated: 2026-08-23T02:30:19Z
-repo: omarchy-control4-plugin
+updated: 2026-08-23T12:08:55Z
+repo: davydotcom/omarchy-control4-plugin
 ---
 
 # david-estes's handoff
 
 ## Last user ask
 
-> Commit and push so I can continue on another computer
+> i think we closed the session mid work
 
 ## Suggested next prompt
 
-> deliver focused-room — room list after Connect, persist focus, chip shows the room name
+> close out focused-room — ledger the live Base Fam chip, commit the uncommitted delivery, mark the spec completed
 
 ## Recent reflections
 
@@ -27,5 +27,5 @@ Nothing this session.
 
 ## Your recent activity
 
-_(no commits attributed to you in this repo's graph)_
+Run `git log --oneline --author=<you> -10` for recent commits.
 

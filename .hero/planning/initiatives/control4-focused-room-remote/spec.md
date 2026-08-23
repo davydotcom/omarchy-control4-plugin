@@ -12,6 +12,7 @@ child:
   - plugin-scaffold
   - director-session
   - focused-room
+  - credentials-gear
   - watch-and-listen
   - room-volume-mute-off
   - room-now-playing
@@ -48,7 +49,8 @@ Ordered children. Sizes and depends-on are locked for this compose; `/design` re
 |---|---|---|---|---|---|---|
 | 1 | `plugin-scaffold` | completed | small | now | — | Valid Omarchy `bar-widget` with nested details `Panel.qml`, placeholder chip, empty panel. |
 | 2 | `director-session` | completed | medium | now | `plugin-scaffold` | In-process JWT session to LAN Director; headless `service` so auth outlives the panel. |
-| 3 | `focused-room` | planning | small | now | `director-session` | Load rooms from `ui_configuration`, persist one focus, show the name on the chip. |
+| 3 | `focused-room` | delivering | medium | now | `director-session` | Load rooms from `ui_configuration`, persist one focus, show the name on the chip. |
+| 3b | `credentials-gear` | planning | trivial | now | `focused-room` | Hide IP/email/password once set; header gear reveals them to change login. |
 | 4 | `watch-and-listen` | planning | medium | now | `focused-room` | One source-picker; Watch vs Listen only changes experience filter and select command. |
 | 5 | `room-volume-mute-off` | planning | small | next | `focused-room` | Volume up/down, mute toggle, room off — button chrome, not a mixer. |
 | 6 | `room-now-playing` | planning | small | next | `focused-room` | Poll power/volume/mute/source; show on chip and panel header. |

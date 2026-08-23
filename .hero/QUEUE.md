@@ -6,129 +6,28 @@
 
 # Hero Ready Queue
 
-_Generated: 2026-08-23T02:30:19Z · 11 ready specs_
-
-## control4-focused-room-remote — Control4 focused-room remote
-_initiative · planning · horizon: now_
-
-Omarchy widget that acts like a Control4 remote for one focused room: Watch, Listen, volume, mute, off.
-
-**Status:** planning — `plugin-scaffold` and `director-session` completed; `focused-room` designed.
-
-**Pick up at:** `/deliver focused-room` — join ui_configuration watch/listen to items, persist focus.json, chip shows the room name.
-
-→ `/deliver focused-room`
-
-**Files:** `.hero/planning/features/focused-room/spec.md`, `Service.qml`, `Panel.qml`, `BarWidget.qml`
-
-**Skip:** Python sidecar, HA proxy, second Quickshell process, overlay remote, OS 4.2 JWT workaround, lights/climate/shades/cameras.
-
----
+_Generated: 2026-08-23T12:25:41Z · 2 ready specs_
 
 ## focused-room — Focused room
-_feature · planning · horizon: now_
+_feature · delivering · horizon: now_
 
 Pick one Control4 room, persist it, show the name on the bar chip.
 
-**Status:** planning — design just landed. No code yet.
+**Status:** delivering — room list, `focus.json`, and chip name are live (Deck). Login form now behind `credentials-gear`. Composer gone-id / empty-list / single-room auto-select were not live-tapped.
 
-**Pick up at:** implement `extractRooms` + Service `focus.json`, then the connected panel list and chip elide.
+**Pick up at:** close-out — ledger the live chip, then `/deliver credentials-gear` if the form is still showing.
 
-→ `/deliver focused-room`
+→ `/deliver credentials-gear`
 
-**Files:** `DirectorClient.js`, `Service.qml`, `Panel.qml`, `BarWidget.qml`, `tests/director-client.test.js`
+**Files:** `Panel.qml`, `Service.qml`, `BarWidget.qml`
 
 **Skip:** `/locations/rooms/.../audio_devices`; new HTTP client; Watch/Listen/volume; floor tree; password in `shell.json`; OS 4.2 workaround.
 
 ---
 
-## watch-and-listen — Watch and Listen
-_feature · planning · horizon: now_
+## control4-focused-room-remote — Control4 focused-room remote
+_initiative · planning · horizon: now_
 
-One source-picker for Watch and Listen; filter and command change, UI does not.
+_Run opener — arm with `/drive control4-focused-room-remote`_
 
-**Status:** planning — compose stub; depends on `focused-room`.
-
-**Pick up at:** run `/design watch-and-listen` after focused-room is designed. Do not implement from this stub.
-
-→ `/design watch-and-listen`
-
-**Files:** `.hero/planning/features/watch-and-listen/spec.md`, `.hero/planning/initiatives/control4-focused-room-remote/spec.md`
-
-**Skip:** two specs or two picker UIs; `/locations/rooms/.../audio_devices` as the catalog; volume/now-playing in this child.
-
----
-
-## room-now-playing — Room now playing
-_feature · planning · horizon: next_
-
-Poll focused-room power, volume/mute, and source; show now-playing on the chip and panel header.
-
-**Status:** planning — compose stub; `horizon: next`. Do not design until Watch/Listen is designed.
-
-**Pick up at:** run `/design room-now-playing` after `/design watch-and-listen`. Do not implement from this stub.
-
-→ `/design room-now-playing`
-
-**Files:** `.hero/planning/features/room-now-playing/spec.md`, `.hero/planning/initiatives/control4-focused-room-remote/spec.md`
-
-**Skip:** shipping before Watch/Listen; lights/climate metadata; websocket-only designs unless `/design` proves REST poll is insufficient.
-
----
-
-## room-volume-mute-off — Room volume, mute, and off
-_feature · planning · horizon: next_
-
-Focused-room volume up/down, mute toggle, and room off — buttons, not a mixer.
-
-**Status:** planning — compose stub; `horizon: next`. Do not design until Watch/Listen is designed.
-
-**Pick up at:** run `/design room-volume-mute-off` after `/design watch-and-listen`. Do not implement from this stub.
-
-→ `/design room-volume-mute-off`
-
-**Files:** `.hero/planning/features/room-volume-mute-off/spec.md`, `.hero/planning/initiatives/control4-focused-room-remote/spec.md`
-
-**Skip:** mixer/slider-first unless `/design` justifies it; delivering before Watch/Listen; whole-house volume.
-
----
-
-## rooms-from-ui-config-join-items — Rooms from ui_configuration joined to items
-_decision · accepted · horizon: now_
-
-_(no `## Kickoff` section — run `/design` or hand-edit /home/destes/projects/omarchy/omarchy-control4-plugin/.hero/knowledge/decisions/rooms-from-ui-config-join-items/spec.md)_
-
----
-
-## qml-new-file-shell-restart — New QML files need a shell restart
-_context · active · horizon: now_
-
-_(no `## Kickoff` section — run `/design` or hand-edit /home/destes/projects/omarchy/omarchy-control4-plugin/.hero/knowledge/context/qml-new-file-shell-restart/spec.md)_
-
----
-
-## in-process-director-rest — In-process Director REST
-_decision · accepted · horizon: now_
-
-_(no `## Kickoff` section — run `/design` or hand-edit /home/destes/projects/omarchy/omarchy-control4-plugin/.hero/knowledge/decisions/in-process-director-rest/spec.md)_
-
----
-
-## plugin-id-from-day-one — Plugin ID from day one
-_decision · accepted · horizon: now_
-
-_(no `## Kickoff` section — run `/design` or hand-edit /home/destes/projects/omarchy/omarchy-control4-plugin/.hero/knowledge/decisions/plugin-id-from-day-one/spec.md)_
-
----
-
-## omarchy-bar-widget-nested-panel — Omarchy bar-widget nested panel
-_context · active · horizon: now_
-
-_(no `## Kickoff` section — run `/design` or hand-edit /home/destes/projects/omarchy/omarchy-control4-plugin/.hero/knowledge/context/omarchy-bar-widget-nested-panel/spec.md)_
-
----
-
-## control4-os42-local-jwt-401 — Control4 OS 4.2 local JWT 401
-_context · active · horizon: now_
-
-_(no `## Kickoff` section — run `/design` or hand-edit /home/destes/projects/omarchy/omarchy-control4-plugin/.hero/knowledge/context/control4-os42-local-jwt-401/spec.md)_
+Ship a third-party Omarchy plugin that authenticates to a local Control4 Director, keeps one room in focus, and lets the user Watch, Listen, adjust volume, mute, and turn that room off — with now-playing reflected on the chip and panel. Success is a working bar-widget on OS 3.x local REST with a cloud-issued director JWT, not feature parity with Composer or the Control4 app.

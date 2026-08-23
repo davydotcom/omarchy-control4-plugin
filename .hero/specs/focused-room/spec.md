@@ -2,9 +2,9 @@
 title: Focused room
 slug: focused-room
 type: feature
-status: planning
+status: completed
 domain: engineering
-size: small
+size: medium
 horizon: now
 parent: control4-focused-room-remote
 depends-on:
@@ -15,6 +15,9 @@ relates-to:
   - rooms-from-ui-config-join-items
   - qml-new-file-shell-restart
   - in-process-director-rest
+claimed_by: david-estes
+claimed_at: 2026-08-23T07:33:51-04:00
+completed_at: 2026-08-23T12:28:39Z
 ---
 # Focused room
 
@@ -32,13 +35,13 @@ When the Director session is connected, load a flat list of visible AV rooms by 
 
 Pick one Control4 room, persist it, show the name on the bar chip.
 
-**Status:** planning — design just landed. No code yet.
+**Status:** delivering — room list, `focus.json`, and chip name are live (Deck). Login form now behind `credentials-gear`. Composer gone-id / empty-list / single-room auto-select were not live-tapped; user signed off close-out.
 
-**Pick up at:** implement `extractRooms` + Service `focus.json`, then the connected panel list and chip elide.
+**Pick up at:** `hero spec verify focused-room` then `/deliver watch-and-listen`.
 
-→ `/deliver focused-room`
+→ `hero spec verify focused-room`
 
-**Files:** `DirectorClient.js`, `Service.qml`, `Panel.qml`, `BarWidget.qml`, `tests/director-client.test.js`
+**Files:** `Panel.qml`, `Service.qml`, `BarWidget.qml`
 
 **Skip:** `/locations/rooms/.../audio_devices`; new HTTP client; Watch/Listen/volume; floor tree; password in `shell.json`; OS 4.2 workaround.
 
@@ -114,8 +117,8 @@ User tap on a room button → `setFocusedRoom(id)`: no-op if `id` is not in `roo
 
 **Panel (`Panel.qml`).**
 
-- Keep the existing login form (IP / email / password / Connect) — reconnect still needed.
-- WHEN `sessionState === "connected"`, below the form show a flat `Column` + `Repeater` of `qs.Ui` `Button`s. **Not** `ButtonGroup` (that is a horizontal chip row). `text` = room name; `selected: true` on the focused id; `onClicked` → `session.setFocusedRoom(modelData.id)`.
+- First-run still uses the login form (IP / email / password / Connect). After credentials are set, hide that form behind a header gear — owned by `credentials-gear`. Reconnect stays available; the fields are not the connected surface.
+- WHEN `sessionState === "connected"`, show a flat `Column` + `Repeater` of `qs.Ui` `Button`s. **Not** `ButtonGroup` (that is a horizontal chip row). `text` = room name; `selected: true` on the focused id; `onClicked` → `session.setFocusedRoom(modelData.id)`.
 - Show `roomsHint` when non-empty (`No rooms` / `Saved room is gone. Pick a room.`).
 - No Watch/Listen, volume, now-playing.
 - Keep title Control4, Escape-to-close, Tab `switchPanel`, `manageIpc: false`, `fittedContentWidth(Style.space(320))`. Height may grow with the list (`fittedContentHeight` already tracks `content.implicitHeight`).
@@ -124,27 +127,19 @@ User tap on a room button → `setFocusedRoom(id)`: no-op if `id` is not in `roo
 
 ## Changes
 
-1. `DirectorClient.js` — add `extractRooms(uiConfig, items)`, `isRoomHidden(value)` (true for boolean `true`, `"1"`, `1`; false when missing), sort-by-name-then-id helper, and `parseFocusFile(raw)` → number or `null`. No Process, no HTTP. Keep existing auth/curl helpers untouched.
+1. `DirectorClient.js` — added `extractRooms(uiConfig, items)`, `isRoomHidden(value)` (true for boolean `true`, `"1"`, `1`; false when missing), `sortRoomsByNameThenId` comparator, and `parseFocusFile(raw)` → number or `null`. Existing auth/curl helpers untouched.
 
-2. `Service.qml` — add `rooms`, `focusedRoomId`, `focusedRoomName`, `roomsHint`, `setFocusedRoom(id)`, `refreshRooms()`. `focusPath` beside `credentialsPath`. Second `FileView` (`atomicWrites`, chmod 600) for `focus.json`. Call `refreshRooms()` when `sessionState` becomes `connected` (after focus file has loaded or failed). Apply the selection rules above. On disconnect, keep id in memory/file; chip gating is in the widget. Never log the file.
+2. `Service.qml` — added `rooms`, `focusedRoomId`, `focusedRoomName`, `roomsHint`, `setFocusedRoom(id)`, `refreshRooms()`, `focusPath`, focus `FileView` (`atomicWrites`, dedicated chmod 600 Process). `refreshRooms()` when `sessionState` becomes `connected`, gated on focus FileView `onLoaded`/`onLoadFailed`. mkdir also reloads the focus file. Selection rules applied in `_applyRooms`. GET/parse failures keep previous `rooms`. Disconnect keeps id in memory/file.
 
-3. `Panel.qml` — keep the login form. When `session.sessionState === "connected"`, show `roomsHint` (if any) and a `Column`/`Repeater` of `qs.Ui` `Button`s bound to `session.rooms`, `selected` when ids match, click → `setFocusedRoom`. Do not use `ButtonGroup`. Do not call `directorGet` from the panel.
+3. `Panel.qml` — when connected, shows `roomsHint` if non-empty and a `Column`/`Repeater` of `qs.Ui` `Button`s bound to `session.rooms`, `selected` when ids match, click → `setFocusedRoom`. No `ButtonGroup`. No `directorGet` from the panel. Login-form visibility after credentials are set is `credentials-gear`.
 
-4. `BarWidget.qml` — chip text from `focusedRoomName` when connected with valid focus, else `C4`. Cap width ~`Style.space(140)` with `Text.ElideRight`. Tooltip `Kitchen — Connected` vs today's `Control4 — <statusText>`. Left-click still `togglePanel()`. Do not change `moduleName`.
+4. `BarWidget.qml` — chip text from `focusedRoomName` when connected with valid focus, else `C4`. Inner WidgetButton label hidden; overlay `Text` with `Text.ElideRight` capped at `Style.space(140)`. Tooltip `<full name> — <statusText>` vs `Control4 — <statusText>`. Left-click still `togglePanel()`. `moduleName` unchanged.
 
-5. `tests/director-client.test.js` — Node fixtures for `extractRooms` / hidden / parseFocus:
-   - hidden skipped (`roomHidden: true`, `"1"`, `1`)
-   - cameras-only (and other non-watch/listen) skipped even when a room item exists
-   - name join from items; watch+listen on the same `room_id` → one row
-   - unmatched experience `room_id` omitted (gone id 99 not in the list; no `"Room 99"`)
-   - sort by name then id
-   - missing/non-array `experiences` or non-array `items` → `[]`
-   - missing `roomHidden` → visible
-   - `parseFocusFile` number vs `{}` / invalid → `null`
+5. `tests/director-client.test.js` — Node fixtures for `extractRooms` / `isRoomHidden` / `parseFocusFile` / `sortRoomsByNameThenId` (hidden skipped, cameras-only skipped, name join, watch+listen dedupe, gone id 99 omitted, sort by name then id, missing/non-array experiences or items → `[]`, missing `roomHidden` visible, parseFocus number vs `{}` / invalid → `null`). Existing assertions kept.
 
-6. `README.md` — chip shows the focused room name (elided); pick the room in the panel when connected; `focus.json` path (no secrets in that file). Usage: after Connect, pick a room; left-click still toggles the panel. Do not add an example password.
+6. `README.md` — chip shows the focused room name (elided); pick the room in the panel when connected; `focus.json` path (no secrets in that file). Usage: after Connect, pick a room; left-click still toggles the panel.
 
-7. Live plugin dir `$HOME/.config/omarchy/plugins/io.github.davydotcom.control4/` — copy the edited files (`DirectorClient.js`, `Service.qml`, `Panel.qml`, `BarWidget.qml`, `README.md`) and `omarchy-shell shell rescanPlugins`. No new `.qml` filename → no forced `omarchy restart shell` (mention `qml-new-file-shell-restart` in the delivery note anyway). Validate the live folder, not the git root.
+7. Live plugin dir `$HOME/.config/omarchy/plugins/io.github.davydotcom.control4/` — copied `DirectorClient.js`, `Service.qml`, `Panel.qml`, `BarWidget.qml`, `README.md` (plus `LICENSE`, `manifest.json` — dir was missing). No new `.qml` filename; `omarchy-shell shell rescanPlugins` only (see `qml-new-file-shell-restart`). Validated the live folder, not the git root.
 
 ## Boundaries
 
@@ -182,7 +177,7 @@ User tap on a room button → `setFocusedRoom(id)`: no-op if `id` is not in `roo
 - IF the visible list is empty THEN THE SYSTEM SHALL set the chip to `C4` and show panel copy `No rooms`
 - WHEN a valid focused room is connected THE SYSTEM SHALL set chip text to the room name with `Text.ElideRight` at about `Style.space(140)` and tooltip `<full name> — <statusText>`
 - WHILE a focused room is persisted THE SYSTEM SHALL expose `focusedRoomId` on the service as the only room context for later children
-- THE SYSTEM SHALL keep the login form, title `Control4`, Escape-to-close, and left-click panel toggle; chip stays `C4` when there is no valid focused room
+- THE SYSTEM SHALL keep title `Control4`, Escape-to-close, and left-click panel toggle; chip stays `C4` when there is no valid focused room. First-run shows the login form; after credentials are set, that form is behind the settings gear (`credentials-gear`)
 
 ## Validation
 

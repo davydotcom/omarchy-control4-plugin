@@ -1,6 +1,6 @@
 # Project Snapshot — omarchy-control4-plugin
 
-_Last refreshed: 2026-08-23T02:30:19Z · projected from 13 source nodes_
+_Last refreshed: 2026-08-23T12:00:28Z · projected from 13 source nodes_
 
 ## Surfaces
 
@@ -14,7 +14,7 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 
 ## Active initiatives
 
-- **Control4 focused-room remote** (surface: —) — 2/6 specs done
+- **Control4 focused-room remote** (surface: —) — 2/6 specs done; in flight: focused-room
 
 ## Recently completed (last 14 days)
 
@@ -22,14 +22,15 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 
 ## Next up across surfaces
 
-1. **(unassigned)** — `control4-focused-room-remote` (—, planning)
-2. **(unassigned)** — `focused-room` (—, planning)
+1. **(unassigned)** — `focused-room` (—, delivering)
+2. **(unassigned)** — `control4-focused-room-remote` (—, planning)
 3. **(unassigned)** — `room-now-playing` (—, planning)
 4. **(unassigned)** — `room-volume-mute-off` (—, planning)
 5. **(unassigned)** — `watch-and-listen` (—, planning)
 
 ## Open risks & blockers
 
+- **Blocked specs (3):** `room-now-playing` (waits on focused-room); `room-volume-mute-off` (waits on focused-room); `watch-and-listen` (waits on focused-room).
 - **Unassigned specs (7) — no `surface:` declared.** Run `hero snapshot assign` to bucket them.
 
 ## Snapshot health

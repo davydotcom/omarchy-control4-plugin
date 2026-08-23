@@ -12,6 +12,7 @@ Item {
   readonly property string home: Quickshell.env("HOME")
   readonly property string stateDir: home + "/.local/state/omarchy/" + pluginId
   readonly property string credentialsPath: stateDir + "/credentials.json"
+  readonly property string focusPath: stateDir + "/focus.json"
   readonly property string bodyPath: stateDir + "/http-body.json"
 
   property string sessionState: "unconfigured"
@@ -22,6 +23,11 @@ Item {
   property string email: ""
   property string password: ""
 
+  property var rooms: []
+  property var focusedRoomId: null
+  property string focusedRoomName: ""
+  property string roomsHint: ""
+
   property string _accountToken: ""
   property string _directorToken: ""
   property int _validSeconds: 86400
@@ -30,6 +36,10 @@ Item {
   property bool _autoConnectPending: false
   property bool _credentialsLoaded: false
   property bool _ignoreCredentialsLoad: false
+  property bool _focusLoaded: false
+  property bool _ignoreFocusLoad: false
+  property int _roomsGen: 0
+  property int _httpGen: 0
   property var _queue: []
   property var _pending: null
   property var _pendingCallback: null
@@ -75,6 +85,7 @@ Item {
     _queue = []
     _pending = null
     _pendingCallback = null
+    _httpGen += 1
     if (httpProc.running) {
       _ignoreHttpExit = true
       httpProc.running = false
@@ -140,6 +151,140 @@ Item {
     if (next === "auth-failed" || next === "error")
       refreshTimer.stop()
     _refreshStatusText()
+    if (next === "connected")
+      refreshRooms()
+  }
+
+  function setFocusedRoom(id) {
+    var match = _roomById(id)
+    if (!match)
+      return
+    focusedRoomId = match.id
+    focusedRoomName = match.name
+    roomsHint = ""
+    persistFocus(match.id)
+  }
+
+  function refreshRooms() {
+    if (sessionState !== "connected")
+      return
+    if (!_focusLoaded)
+      return
+    root._roomsGen += 1
+    var gen = root._roomsGen
+    directorGet("/api/v1/agents/ui_configuration", function(err, body, status) {
+      if (gen !== root._roomsGen)
+        return
+      if (root.sessionState !== "connected")
+        return
+      if (err)
+        return
+      var uiConfig
+      try {
+        uiConfig = JSON.parse(body)
+      } catch (e) {
+        return
+      }
+      root.directorGet("/api/v1/items", function(err2, body2, status2) {
+        if (gen !== root._roomsGen)
+          return
+        if (root.sessionState !== "connected")
+          return
+        if (err2)
+          return
+        var items
+        try {
+          items = JSON.parse(body2)
+        } catch (e2) {
+          return
+        }
+        root._applyRooms(DirectorClient.extractRooms(uiConfig, items))
+      })
+    })
+  }
+
+  function persistFocus(id) {
+    var payload = {}
+    if (id !== null && id !== undefined) {
+      var n = Number(id)
+      if (isFinite(n))
+        payload = { roomId: n }
+    }
+    _ignoreFocusLoad = true
+    focusFile.setText(JSON.stringify(payload) + "\n")
+    // atomicWrites can replace the inode; chmod after the write lands.
+    Qt.callLater(function() {
+      chmodFocusProc.command = ["chmod", "600", root.focusPath]
+      chmodFocusProc.running = true
+    })
+  }
+
+  function loadFocus(raw) {
+    if (_ignoreFocusLoad) {
+      _ignoreFocusLoad = false
+      _focusLoaded = true
+      return
+    }
+    focusedRoomId = DirectorClient.parseFocusFile(raw)
+    if (focusedRoomId === null)
+      focusedRoomName = ""
+    var first = !_focusLoaded
+    _focusLoaded = true
+    if (first && sessionState === "connected")
+      refreshRooms()
+  }
+
+  function _roomById(id) {
+    if (id === null || id === undefined || id === "")
+      return null
+    var n = Number(id)
+    if (!isFinite(n))
+      return null
+    var list = rooms
+    if (!list || !list.length)
+      return null
+    for (var i = 0; i < list.length; i++) {
+      if (Number(list[i].id) === n)
+        return list[i]
+    }
+    return null
+  }
+
+  function _applyRooms(list) {
+    rooms = list || []
+    var visible = rooms
+    if (!visible.length) {
+      focusedRoomId = null
+      focusedRoomName = ""
+      roomsHint = "No rooms"
+      persistFocus(null)
+      return
+    }
+
+    var match = _roomById(focusedRoomId)
+    if (match) {
+      focusedRoomId = match.id
+      focusedRoomName = match.name
+      roomsHint = ""
+      return
+    }
+
+    if (focusedRoomId !== null && focusedRoomId !== undefined) {
+      focusedRoomId = null
+      focusedRoomName = ""
+      roomsHint = "Saved room is gone. Pick a room."
+      persistFocus(null)
+      return
+    }
+
+    if (visible.length === 1) {
+      setFocusedRoom(visible[0].id)
+      return
+    }
+
+    focusedRoomId = null
+    focusedRoomName = ""
+    roomsHint = ""
   }
 
   function _refreshStatusText() {
@@ -190,9 +335,13 @@ Item {
     _pending = job
     _pendingCallback = job.callback || null
     if (job.body) {
+      root._httpGen += 1
+      var gen = root._httpGen
       bodyFile.setText(job.body)
       Qt.callLater(function() {
-        if (root._pending !== job)
+        if (gen !== root._httpGen)
+          return
+        if (!root._pending)
           return
         chmodBodyProc.command = ["chmod", "600", bodyPath]
         chmodBodyProc.running = true
@@ -413,6 +562,16 @@ Item {
   }
 
   FileView {
+    id: focusFile
+    path: root.focusPath
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    onLoaded: root.loadFocus(text())
+    onLoadFailed: root.loadFocus("")
+  }
+
+  FileView {
     id: bodyFile
     path: root.bodyPath
     watchChanges: false
@@ -424,13 +583,24 @@ Item {
     id: mkdirProc
     command: ["mkdir", "-p", root.stateDir]
     running: false
-    onExited: Qt.callLater(function() { credentialsFile.reload() })
+    onExited: Qt.callLater(function() {
+      if (credentialsFile)
+        credentialsFile.reload()
+      if (focusFile)
+        focusFile.reload()
+    })
   }
 
   Process {
     id: chmodProc
     running: false
     command: ["chmod", "600", root.credentialsPath]
+  }
+
+  Process {
+    id: chmodFocusProc
+    running: false
+    command: ["chmod", "600", root.focusPath]
   }
 
   Process {

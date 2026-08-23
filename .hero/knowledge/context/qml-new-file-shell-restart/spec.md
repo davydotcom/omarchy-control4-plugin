@@ -18,4 +18,6 @@ Qt 6.11's QML type loader caches a case-sensitive directory listing (`importDirC
 
 ## Details
 
-Hit when `director-session` added `Service.qml` beside the already-loaded scaffold. First-party plugins avoid it because they ship every `.qml` file before the shell starts. Workaround: `omarchy restart shell` after copying a newly added `.qml` file into the live plugin dir. Edits to files that were already in the listing still hot-reload.
+Hit when `director-session` added `Service.qml` beside the already-loaded scaffold. First-party plugins avoid it because they ship every `.qml` file before the shell starts. Workaround: `omarchy restart shell` after copying a newly added `.qml` file into the live plugin dir.
+
+Edits to files that were already in the listing often hot-reload, but **not** this plugin's nested panel: `BarWidget.qml` loads `Panel.qml` with `Loader { source: Qt.resolvedUrl("Panel.qml") }`. `credentials-gear` copied an existing `Panel.qml` and ran `omarchy-shell shell rescanPlugins`; the running panel kept the old form. `omarchy restart shell` picked up the gear. Treat Loader-sourced plugin QML like a new file: restart the shell after copying.

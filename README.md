@@ -1,6 +1,8 @@
 # Control4
 
-Unofficial Omarchy bar widget for a Control4 focused-room remote. This is
+Unofficial Omarchy bar widget for a Control4 focused-room remote. From
+the bar you can **watch Apple TV**, **listen to Apple Music**, or
+**tune in local radio** (TuneIn) in the room you have focused. This is
 a community plugin. It is **not** made, endorsed, or supported by
 Control4 / Snap One.
 
@@ -97,7 +99,7 @@ omarchy plugin validate "$HOME/.config/omarchy/plugins/io.github.davydotcom.cont
 - First run: enter controller IP, email, and password, then Connect
 - After that the panel is the room list; use the header gear to change login
 - When connected, pick a room in the panel; the chip stays the Control4 mark and the tooltip has the room name and on/off plus the playing source
-- Watch / Listen lists sources for that room; tap one to select it; the panel status line names the current source
+- Watch a source (Apple TV and other video devices) or Listen (Apple Music, TuneIn local radio, and other audio); tap one to select it; the panel status line names the current source
 - Volume slider shows the room level (0–100); release to set; right-click mutes; Off turns the room off and selects the Off row
 - Press Escape to close the panel
 

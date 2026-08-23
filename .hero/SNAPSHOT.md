@@ -1,6 +1,6 @@
 # Project Snapshot — omarchy-control4-plugin
 
-_Last refreshed: 2026-08-23T21:04:07Z · projected from 47 source nodes_
+_Last refreshed: 2026-08-23T21:06:27Z · projected from 47 source nodes_
 
 ## Surfaces
 
@@ -14,25 +14,25 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 
 ## Active initiatives
 
-- **Control4 focused-room remote** (surface: —) — 10/11 specs done; in flight: room-now-playing
 - **Multi-room audio** (surface: —) — 0/3 specs done
 - **Room environment** (surface: —) — 0/5 specs done
 
 ### Recently completed initiatives
 
+- **Control4 focused-room remote** (surface: —) — 11/11 specs done · COMPLETED 2026-08-23
 - **Watch-source virtual remote** (surface: —) — 8/8 specs done · COMPLETED 2026-08-23
 
 ## Recently completed (last 14 days)
 
-- **(unassigned)** — halo-panel-chrome, room-volume-mute-off, listen-library-browse, watch-and-listen, volume-slider-reads-room-name, watch-source-virtual-remote, virtual-remote-numbers, drop-halo-row-accent-tick, remote-pad-clipped-above-volume, transport-glyphs-render-emoji, watch-remote-lost-on-reopen, virtual-remote-transport
+- **(unassigned)** — room-now-playing, control4-focused-room-remote, halo-panel-chrome, listen-library-browse, room-volume-mute-off, watch-and-listen, volume-slider-reads-room-name, watch-source-virtual-remote, virtual-remote-numbers, drop-halo-row-accent-tick, remote-pad-clipped-above-volume, transport-glyphs-render-emoji
 
 ## Next up across surfaces
 
-1. **(unassigned)** — `room-now-playing` (medium, delivering)
-2. **(unassigned)** — `experience-switch` (critical, planning)
-3. **(unassigned)** — `room-blinds` (medium, planning)
-4. **(unassigned)** — `room-climate` (medium, planning)
-5. **(unassigned)** — `room-lighting` (medium, planning)
+1. **(unassigned)** — `experience-switch` (critical, planning)
+2. **(unassigned)** — `room-blinds` (medium, planning)
+3. **(unassigned)** — `room-climate` (medium, planning)
+4. **(unassigned)** — `room-lighting` (medium, planning)
+5. **(unassigned)** — `room-scenes` (medium, planning)
 
 ## Open risks & blockers
 

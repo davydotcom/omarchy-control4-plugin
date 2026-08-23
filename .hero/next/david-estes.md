@@ -1,6 +1,6 @@
 ---
 user: david-estes
-updated: 2026-08-23T21:04:07Z
+updated: 2026-08-23T21:08:55Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
@@ -10,15 +10,17 @@ repo: davydotcom/omarchy-control4-plugin
 
 > Listen Apple Music should list personal stations via MSP navigator, not fake folders
 
-_possibly stale — 7 commit(s) since, last set 6h 51m ago_
+_possibly stale — 8 commit(s) since, last set 6h 55m ago_
 
 ## Last user ask
 
 > lets deliver it
 
+_possibly stale — 1 commit(s) since, last set 5m ago_
+
 ## Suggested next prompt
 
-> deliver room now playing so the chip is the Control4 mark and the panel names what's on
+> deliver experience switch so later lights and climate can add a tab without rewriting Watch and Listen
 
 ## Recent reflections
 

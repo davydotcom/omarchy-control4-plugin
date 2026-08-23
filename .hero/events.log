@@ -50,3 +50,7 @@
 {"ts":"2026-08-23T20:56:20.705520628Z","type":"delivery_complete","agent":"human/david-estes","slug":"halo-panel-chrome","message":"Halo panel chrome"}
 {"ts":"2026-08-23T20:56:20.705666333Z","type":"spec.status_changed","agent":"human/david-estes","slug":"halo-panel-chrome","message":"status -\u003e completed"}
 {"event":"claimed","slug":"room-now-playing","agent":"david-estes","at":"2026-08-23T17:03:05.47789465-04:00"}
+{"ts":"2026-08-23T21:06:12.963892171Z","type":"delivery_complete","agent":"human/david-estes","slug":"room-now-playing","message":"Room now playing"}
+{"ts":"2026-08-23T21:06:12.964023913Z","type":"spec.status_changed","agent":"human/david-estes","slug":"room-now-playing","message":"status -\u003e completed"}
+{"ts":"2026-08-23T21:06:13.390876037Z","type":"delivery_complete","agent":"human/david-estes","slug":"control4-focused-room-remote","message":"Control4 focused-room remote"}
+{"ts":"2026-08-23T21:06:13.390953868Z","type":"spec.status_changed","agent":"human/david-estes","slug":"control4-focused-room-remote","message":"status -\u003e completed"}

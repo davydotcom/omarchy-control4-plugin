@@ -6,33 +6,7 @@
 
 # Hero Ready Queue
 
-_Generated: 2026-08-23T21:04:07Z · 6 ready specs_
-
-## room-now-playing — Room now playing
-_feature · delivering · horizon: now_
-
-Show room on/off on the Control4 mark and name the playing source in the panel status line and tooltip.
-
-**Status:** delivering — code landed; close the verify gate.
-
-**Pick up at:** `hero spec verify room-now-playing --skip-tests`
-
-→ `/deliver room-now-playing`
-
-**Files:** `DirectorClient.js:434`, `Service.qml:84`, `Panel.qml:47`, `BarWidget.qml:18`, `tests/director-client.test.js:332`
-
-**Skip:** `media_sessions` / artwork; a second poll; websocket; putting the room or source name on the chip; restyling Off as muted.
-
----
-
-## control4-focused-room-remote — Control4 focused-room remote
-_initiative · planning · horizon: now_
-
-_Run opener — arm with `/drive control4-focused-room-remote`_
-
-Ship a third-party Omarchy plugin that authenticates to a local Control4 Director, keeps one room in focus, and lets the user Watch, Listen, adjust volume, mute, and turn that room off — with now-playing reflected on the chip and panel. Success is a working bar-widget on OS 3.x local REST with a cloud-issued director JWT, not feature parity with Composer or the Control4 app.
-
----
+_Generated: 2026-08-23T21:08:55Z · 4 ready specs_
 
 ## experience-switch — Experience switch
 _feature · planning · horizon: now_

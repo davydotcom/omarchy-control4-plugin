@@ -21,3 +21,10 @@
 # Per-machine satellite manifest (which subprojects are symlinked locally)
 .hero/satellites.local.json
 # <<< hero gitignore (managed) <<<
+
+# Per-machine Hero runtime state (session locks, PID files, event log, caches)
+.hero/.active-sessions.json
+.hero/cache/
+.hero/events.log
+.hero/sessions/
+.hero/*.pid

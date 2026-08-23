@@ -22,9 +22,11 @@
 .hero/satellites.local.json
 # <<< hero gitignore (managed) <<<
 
-# Per-machine Hero runtime state (session locks, PID files, event log, caches)
+# Per-machine Hero runtime state (session locks, PID files, caches).
+# .hero/events.log is deliberately NOT here: it is append-only project
+# history that hero's pre-commit hook stages, and .gitattributes gives it
+# merge=union for exactly that reason.
 .hero/.active-sessions.json
 .hero/cache/
-.hero/events.log
 .hero/sessions/
 .hero/*.pid

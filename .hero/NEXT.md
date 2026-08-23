@@ -5,7 +5,7 @@ Project shape: see [SNAPSHOT.md](.hero/SNAPSHOT.md).
 <!-- hero:managed-end -->
 
 ---
-updated: 2026-08-23T16:23:59Z
+updated: 2026-08-23T16:37:39Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 

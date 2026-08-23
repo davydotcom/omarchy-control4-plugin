@@ -4,10 +4,13 @@ slug: control4-focused-room-remote
 type: initiative
 status: planning
 domain: engineering
-size: large
+size: giant
 tags: [omarchy, control4, bar-widget, av]
 created: 2026-08-21
 horizon: now
+relates-to:
+  - watch-source-virtual-remote
+  - multi-room-audio
 child:
   - plugin-scaffold
   - director-session
@@ -42,6 +45,13 @@ Omarchy widget that acts like a Control4 remote for one focused room: Watch, Lis
 **Files:** `.hero/planning/features/focused-room/spec.md`, `Service.qml`, `Panel.qml`, `BarWidget.qml`
 
 **Skip:** Python sidecar, HA proxy, second Quickshell process, overlay remote, OS 4.2 JWT workaround, lights/climate/shades/cameras.
+
+## Follow-on initiatives
+
+Scoped 2026-08-23, after Watch/Listen and library browse shipped. Both are siblings, not children — this initiative stays a one-room remote.
+
+- **`watch-source-virtual-remote`** — Watch currently selects a source and stops. That initiative renders each device's own remote (D-pad, transport, digits) from the `commands[]` and `navigator_display_option` metadata the Director already publishes in `GET /api/v1/items`.
+- **`multi-room-audio`** — this initiative's deliberate one-room scope, revisited. Adds rooms to what is playing and shows per-room volume, built on `/api/v1/media_sessions`.
 
 ## Specs
 

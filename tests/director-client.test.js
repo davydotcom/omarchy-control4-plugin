@@ -9,8 +9,9 @@ const src = fs.readFileSync(path.join(__dirname, "..", "DirectorClient.js"), "ut
 const ctx = vm.createContext({})
 vm.runInContext(src, ctx)
 const {
-  parseHttp, parseAccountToken, parseControllerCommonName, parseDirectorToken,
-  classifyProbe, classifyCloudStatus, commandBody, curlArgs, withAuthHeader,
+  parseHttp, parseHttpStatus, parseAccountToken, parseControllerCommonName, parseDirectorToken,
+  classifyProbe, classifyCloudStatus, commandBody, curlArgs, withHeaderFile,
+  authHeaderText, navHeaderText, MAX_RESPONSE_BYTES, isOversizedResponse, isOversizedBytes,
   networkErrorMessage, isTransientCurl,
   normalizeHost, credentialsComplete, statusTextFor, accountAuthBody,
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
@@ -33,6 +34,9 @@ function assert(cond, msg) {
 const http = parseHttp("{\"ok\":true}\n200")
 assert(http.status === 200, "parseHttp status")
 assert(http.body === "{\"ok\":true}", "parseHttp body")
+assert(parseHttpStatus("200") === 200, "parseHttpStatus")
+assert(parseHttpStatus(" 404\n") === 404, "parseHttpStatus trim")
+assert(parseHttpStatus("") === 0, "parseHttpStatus empty")
 
 const token = parseAccountToken(JSON.stringify({ authToken: { token: "abc" } }))
 assert(token.ok && token.token === "abc", "parseAccountToken")
@@ -68,15 +72,34 @@ assert(classifyCloudStatus(401).kind === "sign-in", "cloud 401")
 const post = JSON.parse(commandBody("SELECT_AUDIO_DEVICE", { deviceid: 9 }))
 assert(post.async === true && post.command === "SELECT_AUDIO_DEVICE" && post.tParams.deviceid === 9, "commandBody")
 
-const args = curlArgs({ url: "https://example", insecure: true, bodyPath: "/tmp/body.json" })
+const args = curlArgs({
+  url: "https://example", insecure: true, bodyPath: "/tmp/body.json",
+  headerPath: "/tmp/http-header", outputPath: "/tmp/http-response"
+})
 assert(args.indexOf("-k") !== -1, "curl -k")
 assert(args.indexOf("-f") === -1, "no curl -f")
+assert(args.indexOf("--max-filesize") !== -1, "curl max-filesize")
+assert(args[args.indexOf("--max-filesize") + 1] === String(MAX_RESPONSE_BYTES), "curl max-filesize value")
+assert(args.indexOf("-o") !== -1 && args[args.indexOf("-o") + 1] === "/tmp/http-response", "curl body to file")
+assert(args.indexOf("-w") !== -1 && args[args.indexOf("-w") + 1] === "%{http_code}", "curl status on stdout")
+assert(args.indexOf("@/tmp/http-header") !== -1, "auth via header file")
+assert(args.join(" ").indexOf("Bearer") === -1, "no bearer token in argv")
 assert(args.join(" ").indexOf("secret") === -1, "no secret in argv template")
 assert(JSON.stringify(args).indexOf("password") === -1, "no password in argv template")
 
-const authed = withAuthHeader(["curl", "https://x"], "TOKEN")
+const authed = withHeaderFile(["curl", "https://x"], "/tmp/http-header")
 assert(authed.indexOf("-H") !== -1, "auth header flag")
-assert(authed.indexOf("Authorization: Bearer TOKEN") !== -1, "auth header value")
+assert(authed.indexOf("@/tmp/http-header") !== -1, "auth header file path")
+assert(authed.join(" ").indexOf("TOKEN") === -1, "token not in withHeaderFile argv")
+assert(authHeaderText("TOKEN") === "Authorization: Bearer TOKEN\n", "authHeaderText")
+assert(navHeaderText("TOKEN") === "Authorization: Bearer TOKEN\nJWT: TOKEN\n", "navHeaderText")
+assert(isOversizedResponse("x".repeat(MAX_RESPONSE_BYTES + 1)), "oversized response")
+assert(!isOversizedResponse("ok"), "small response not oversized")
+assert(isOversizedBytes(MAX_RESPONSE_BYTES + 1), "oversized bytes")
+assert(!isOversizedBytes(12), "small bytes not oversized")
+assert(!isOversizedBytes("nope"), "invalid size not oversized")
+assert(networkErrorMessage(63) === "Response too large", "max-filesize message")
+assert(!isTransientCurl(63), "oversized not transient")
 
 assert(normalizeHost("https://192.168.1.10/api") === "192.168.1.10", "normalizeHost")
 assert(credentialsComplete("192.168.1.10", "a@b.c", "x"), "credentialsComplete")
@@ -412,8 +435,16 @@ assert(tapArgs.screen === "Browse" && tapArgs.URL === "http://opml/Tune.ashx?id=
   && tapArgs.text === "90.1 | WFYI" && tapArgs.image === "http://logo.png",
   "tuneInTapArgs mirrors driver Browse action params")
 assert(tuneInTapArgs(tuneInFolder[0]).key === "local", "tuneInTapArgs carries key")
-const navArgs = curlNavArgs({ url: "https://x/socket.io", insecure: true, maxTime: 35 })
+const navArgs = curlNavArgs({
+  url: "https://x/socket.io", insecure: true, maxTime: 35,
+  headerPath: "/tmp/nav-header", outputPath: "/tmp/nav-response", jwt: "SECRET"
+})
 assert(navArgs.indexOf("-k") !== -1 && navArgs.indexOf("--max-time") !== -1, "curlNavArgs")
+assert(navArgs.indexOf("--max-filesize") !== -1, "curlNavArgs max-filesize")
+assert(navArgs.indexOf("@/tmp/nav-header") !== -1, "curlNavArgs header file")
+assert(navArgs.indexOf("-o") !== -1 && navArgs[navArgs.indexOf("-o") + 1] === "/tmp/nav-response", "curlNavArgs body to file")
+assert(navArgs.join(" ").indexOf("SECRET") === -1, "jwt not in curlNavArgs argv")
+assert(navArgs.join(" ").indexOf("JWT:") === -1, "JWT header not in argv")
 
 const NAV = ["MENU", "UP", "DOWN", "LEFT", "RIGHT", "ENTER"]
 const TRANSPORT = ["PLAY", "STOP", "PAUSE", "SKIP_FWD", "SKIP_REV", "SCAN_FWD", "SCAN_REV"]

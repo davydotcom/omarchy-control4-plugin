@@ -14,6 +14,11 @@ var STATUS_CONNECTED = "Connected"
 var STATUS_SIGN_IN_FAILED = "Sign-in failed"
 var STATUS_DIRECTOR_401 = "Director rejected the session (HTTP 401). This is expected on Control4 OS 4.2."
 
+// Cap for curl --max-filesize and for refusing to load a response file
+// into QML. Bodies go to -o (not StdioCollector) so the long-lived shell
+// never retains an unbounded LAN/cloud/nav payload in process memory.
+var MAX_RESPONSE_BYTES = 8388608
+
 function accountAuthBody(email, password) {
   return JSON.stringify({
     clientInfo: {
@@ -77,6 +82,13 @@ function parseHttp(stdout) {
   if (!isFinite(status))
     return { body: text, status: 0 }
   return { body: text.substring(0, lastNl), status: status }
+}
+
+function parseHttpStatus(stdout) {
+  var status = parseInt(String(stdout || "").trim(), 10)
+  if (!isFinite(status))
+    return 0
+  return status
 }
 
 function parseAccountToken(body) {
@@ -152,9 +164,20 @@ function networkErrorMessage(exitCode) {
     return "Could not read request body"
   if (code === 15 || code === 143 || code === 130)
     return "Request interrupted"
+  if (code === 63)
+    return "Response too large"
   if (!isFinite(code) || code === 0)
     return "Network error"
   return "Network error (" + code + ")"
+}
+
+function isOversizedResponse(text) {
+  return String(text || "").length > MAX_RESPONSE_BYTES
+}
+
+function isOversizedBytes(n) {
+  var v = Number(n)
+  return isFinite(v) && v > MAX_RESPONSE_BYTES
 }
 
 function isTransientCurl(exitCode) {
@@ -181,10 +204,13 @@ function statusTextFor(sessionState, authFailedKind, lastError, hasCredentials, 
 }
 
 function curlArgs(opts) {
-  var args = ["curl", "-sS", "--max-time", "20"]
+  var args = ["curl", "-sS", "--max-time", "20", "--max-filesize", String(MAX_RESPONSE_BYTES)]
   if (opts && opts.insecure)
     args.push("-k")
-  args.push("-w", "\n%{http_code}")
+  args.push("-o", String(opts && opts.outputPath || ""))
+  args.push("-w", "%{http_code}")
+  if (opts && opts.headerPath)
+    args.push("-H", "@" + String(opts.headerPath))
   if (opts && opts.bodyPath) {
     args.push("-H", "Content-Type: application/json")
     args.push("--data-binary", "@" + opts.bodyPath)
@@ -193,11 +219,23 @@ function curlArgs(opts) {
   return args
 }
 
-function withAuthHeader(args, token) {
+function authHeaderText(token) {
   if (!token)
+    return ""
+  return "Authorization: Bearer " + String(token) + "\n"
+}
+
+function navHeaderText(token) {
+  if (!token)
+    return ""
+  return authHeaderText(token) + "JWT: " + String(token) + "\n"
+}
+
+function withHeaderFile(args, headerPath) {
+  if (!headerPath)
     return args.slice()
   var out = args.slice()
-  out.splice(out.length - 1, 0, "-H", "Authorization: Bearer " + String(token))
+  out.splice(out.length - 1, 0, "-H", "@" + String(headerPath))
   return out
 }
 
@@ -448,19 +486,20 @@ function nowPlayingLabel(parsed, items, watchSources, listenSources) {
 
 function curlNavArgs(opts) {
   var maxTime = opts && opts.maxTime != null ? String(opts.maxTime) : "35"
-  var args = ["curl", "-sS", "--max-time", maxTime]
+  var args = ["curl", "-sS", "--max-time", maxTime, "--max-filesize", String(MAX_RESPONSE_BYTES)]
   if (opts && opts.insecure)
     args.push("-k")
   if (opts && opts.cookiePath) {
     args.push("-b", String(opts.cookiePath))
     args.push("-c", String(opts.cookiePath))
   }
-  if (opts && opts.jwt)
-    args.push("-H", "JWT: " + String(opts.jwt))
+  if (opts && opts.headerPath)
+    args.push("-H", "@" + String(opts.headerPath))
   if (opts && opts.bodyPath) {
     args.push("-H", "Content-Type: " + String(opts.contentType || "text/plain"))
     args.push("--data-binary", "@" + opts.bodyPath)
   }
+  args.push("-o", String(opts && opts.outputPath || ""))
   args.push(String(opts && opts.url || ""))
   return args
 }

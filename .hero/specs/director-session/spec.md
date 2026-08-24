@@ -53,7 +53,7 @@ Lock:
 - Cloud Control4 APIs (`apis.control4.com`): `curl -fsS --max-time 10` **with TLS verify**.
 - LAN Director `https://<ip>/api/v1/...`: `curl -kfsS --max-time 10` (**`-k` required**).
 - Always append `-w "\n%{http_code}"` so 401 is distinguishable from other 4xx/5xx (`-f` maps those to exit 22). Parse the last line as the status; the rest is the body. If `-f` swallows the status line, drop `-f` and keep `-sS` / `-k` / `--max-time 10` — those three are the invariant.
-- Password and JSON bodies MUST NOT appear in `Process.command` argv (`ps` leak). Write POST body with `FileView.setText` to a 0600 temp file in the plugin state dir, pass `--data-binary @path`, then `rm -f` that file. Bearer token in `-H` is residual same-user `/proc` risk; acceptable under the unsandboxed plugin threat model. **Never** `console.warn` tokens, passwords, `Process.command`, or credentials-file contents.
+- Password and JSON bodies MUST NOT appear in `Process.command` argv (`ps` leak). Write POST body with `FileView.setText` to a 0600 temp file in the plugin state dir, pass `--data-binary @path`. Bearer and navigator JWT headers use the same pattern (`-H @path`); never put tokens in argv. Write response bodies with `curl -o` (mode 600) and `--max-filesize`; `StdioCollector` keeps only the status code. **Never** `console.warn` tokens, passwords, `Process.command`, or credentials-file contents.
 - Serialize HTTP on one (or a small fixed set of) `Process` object(s). Do not fire overlapping curls that share a Process.
 
 **Auth flow — copy pyControl4 `account.py` endpoints exactly.** `APPLICATION_KEY` is a public client key from pyControl4, not a user secret. Live in `DirectorClient.js`: `78f6791373d61bea49fdb9fb8897f1f3af193f11`.

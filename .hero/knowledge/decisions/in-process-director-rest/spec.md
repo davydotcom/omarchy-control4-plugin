@@ -28,7 +28,7 @@ The original wording was "QML/JS + Qt Network." First-party Omarchy HTTP is not 
 
 ## Decision
 
-Talk to Control4 in-process via QML/JS driving short-lived `curl` through Quickshell `Process`. Cloud APIs (`apis.control4.com`): `curl -fsS --max-time 10` with TLS verify. LAN Director (`https://<ip>/api/v1/...`): `curl -kfsS --max-time 10` (`-k` required). No HA dependency and no Python sidecar. POST bodies go to a 0600 temp file (`--data-binary @path`) so passwords never appear in `Process.command` argv. Bearer tokens in `-H` are a residual same-user `/proc` risk accepted under the unsandboxed plugin threat model; never log tokens or passwords.
+Talk to Control4 in-process via QML/JS driving short-lived `curl` through Quickshell `Process`. Cloud APIs (`apis.control4.com`): TLS verify on. LAN Director (`https://<ip>/api/v1/...`): `-k` required. No HA dependency and no Python sidecar. POST bodies go to a 0600 temp file (`--data-binary @path`) so passwords never appear in `Process.command` argv. Bearer and navigator JWT headers go the same way: write a 0600 header file and pass `-H @path` — never put tokens in argv. Response bodies go to `-o` (mode 600) with `curl --max-filesize`; `StdioCollector` keeps only `%{http_code}`. Refuse to load a file larger than that cap so a large LAN/cloud/nav payload cannot exhaust the long-lived shell. Never log tokens or passwords.
 
 ## Consequences
 

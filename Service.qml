@@ -14,6 +14,8 @@ Item {
   readonly property string credentialsPath: stateDir + "/credentials.json"
   readonly property string focusPath: stateDir + "/focus.json"
   readonly property string bodyPath: stateDir + "/http-body.json"
+  readonly property string headerPath: stateDir + "/http-header"
+  readonly property string responsePath: stateDir + "/http-response"
 
   property string sessionState: "unconfigured"
   property string statusText: DirectorClient.STATUS_NOT_CONFIGURED
@@ -72,6 +74,11 @@ Item {
   property bool _navIgnoreExit: false
   property string _navBodyPath: stateDir + "/nav-body.txt"
   property string _navCookiePath: stateDir + "/nav-cookies.txt"
+  property string _navHeaderPath: stateDir + "/nav-header"
+  property string _navResponsePath: stateDir + "/nav-response"
+  property string _navQueuedKind: ""
+  property string _navQueuedUrl: ""
+  property int _navQueuedMaxTime: 35
   property int _navPostMaxTime: 12
   property bool _browsePending: false
   property int _browseTries: 0
@@ -106,6 +113,11 @@ Item {
   property var _pending: null
   property var _pendingCallback: null
   property bool _ignoreHttpExit: false
+  property bool _httpAwaitingBody: false
+  property int _httpExitCode: 0
+  property string _httpStatusText: ""
+  property bool _navAwaitingBody: false
+  property int _navExitCode: 0
 
   readonly property bool configured: DirectorClient.credentialsComplete(controllerIp, email, password)
   readonly property bool hasToken: _directorToken.length > 0
@@ -157,12 +169,17 @@ Item {
     _pending = null
     _pendingCallback = null
     _httpGen += 1
+    _httpAwaitingBody = false
     if (httpProc.running) {
       _ignoreHttpExit = true
       httpProc.running = false
     }
     if (chmodBodyProc.running)
       chmodBodyProc.running = false
+    if (chmodResponseProc.running)
+      chmodResponseProc.running = false
+    if (responseStatProc.running)
+      responseStatProc.running = false
     _stopNav()
     closeBrowse()
     closeRemote()
@@ -750,11 +767,19 @@ Item {
     _navSid = ""
     _navClientId = ""
     _navSubId = ""
+    _navQueuedKind = ""
+    _navQueuedUrl = ""
+    _navAwaitingBody = false
     _navIgnoreExit = true
+    navPostDelay.stop()
     if (navProc.running)
       navProc.running = false
     if (navChmodProc.running)
       navChmodProc.running = false
+    if (chmodNavResponseProc.running)
+      chmodNavResponseProc.running = false
+    if (navStatProc.running)
+      navStatProc.running = false
   }
 
   function _navSocketUrl() {
@@ -766,26 +791,40 @@ Item {
 
   function _navGet(path, maxTime) {
     var url = path.indexOf("https:") === 0 ? path : DirectorClient.directorUrl(controllerIp, path)
-    var args = DirectorClient.curlNavArgs({
-      url: url,
-      insecure: true,
-      maxTime: maxTime || 35,
-      cookiePath: _navCookiePath,
-      jwt: _directorToken
-    })
-    args = DirectorClient.withAuthHeader(args, _directorToken)
-    _navIgnoreExit = false
-    navProc.command = args
-    navProc.running = true
+    root._navQueuedKind = "get"
+    root._navQueuedUrl = url
+    root._navQueuedMaxTime = maxTime || 35
+    navHeaderFile.setText(DirectorClient.navHeaderText(_directorToken))
+    navPostDelay.restart()
   }
 
   function _navPostRaw(body, maxTime) {
+    root._navQueuedKind = "post"
     root._navPostMaxTime = maxTime || 12
+    navHeaderFile.setText(DirectorClient.navHeaderText(_directorToken))
     navBodyFile.setText(String(body || ""))
     navPostDelay.restart()
   }
 
+  function _startNavGet() {
+    if (!root._navPhase)
+      return
+    var args = DirectorClient.curlNavArgs({
+      url: root._navQueuedUrl,
+      insecure: true,
+      maxTime: root._navQueuedMaxTime,
+      cookiePath: root._navCookiePath,
+      headerPath: root._navHeaderPath,
+      outputPath: root._navResponsePath
+    })
+    root._navIgnoreExit = false
+    navProc.command = args
+    navProc.running = true
+  }
+
   function _startNavPost() {
+    if (!root._navPhase)
+      return
     var args = DirectorClient.curlNavArgs({
       url: root._navSocketUrl(),
       insecure: true,
@@ -793,20 +832,39 @@ Item {
       bodyPath: root._navBodyPath,
       contentType: "text/plain",
       cookiePath: root._navCookiePath,
-      jwt: root._directorToken
+      headerPath: root._navHeaderPath,
+      outputPath: root._navResponsePath
     })
-    args = DirectorClient.withAuthHeader(args, root._directorToken)
     root._navIgnoreExit = false
     navProc.command = args
     navProc.running = true
   }
 
-  function _onNavExit(exitCode, stdout) {
+  function _onNavExit(exitCode) {
+    if (_navIgnoreExit) {
+      _navIgnoreExit = false
+      return
+    }
+    if (exitCode === 63) {
+      _stopNav()
+      return
+    }
+    _navAwaitingBody = true
+    _navExitCode = exitCode
+    chmodNavResponseProc.command = ["chmod", "600", root._navResponsePath]
+    chmodNavResponseProc.running = true
+  }
+
+  function _finishNavBody(exitCode, stdout) {
     if (_navIgnoreExit) {
       _navIgnoreExit = false
       return
     }
     var text = String(stdout || "")
+    if (DirectorClient.isOversizedResponse(text)) {
+      _stopNav()
+      return
+    }
     if (_navPhase === "handshake") {
       _navSid = DirectorClient.parseEngineIoSid(text)
       if (!_navSid) {
@@ -1135,7 +1193,8 @@ Item {
   }
 
   function _pump() {
-    if (httpProc.running || chmodBodyProc.running)
+    if (httpProc.running || chmodBodyProc.running || chmodResponseProc.running
+        || responseStatProc.running || _httpAwaitingBody)
       return
     if (_pending)
       return
@@ -1146,17 +1205,25 @@ Item {
     _queue = rest
     _pending = job
     _pendingCallback = job.callback || null
+    var chmodFiles = []
     if (job.body) {
+      bodyFile.setText(job.body)
+      chmodFiles.push(bodyPath)
+    }
+    if (job.token) {
+      headerFile.setText(DirectorClient.authHeaderText(job.token))
+      chmodFiles.push(headerPath)
+    }
+    if (chmodFiles.length) {
       root._httpGen += 1
       job.gen = root._httpGen
       var gen = root._httpGen
-      bodyFile.setText(job.body)
       Qt.callLater(function() {
         if (gen !== root._httpGen)
           return
         if (!root._pending)
           return
-        chmodBodyProc.command = ["chmod", "600", bodyPath]
+        chmodBodyProc.command = ["chmod", "600"].concat(chmodFiles)
         chmodBodyProc.running = true
       })
       return
@@ -1168,19 +1235,33 @@ Item {
     var args = DirectorClient.curlArgs({
       url: job.url,
       insecure: job.insecure === true,
-      bodyPath: job.body ? bodyPath : ""
+      bodyPath: job.body ? bodyPath : "",
+      headerPath: job.token ? headerPath : "",
+      outputPath: responsePath
     })
-    args = DirectorClient.withAuthHeader(args, job.token || "")
     httpProc.command = args
     httpProc.running = true
   }
 
-  function _finishHttp(exitCode, stdout) {
+  function _finishHttp(exitCode, body, statusText) {
     var job = _pending
     var cb = _pendingCallback
     _pending = null
     _pendingCallback = null
-    var parsed = DirectorClient.parseHttp(stdout)
+    _httpAwaitingBody = false
+    if (DirectorClient.isOversizedResponse(body)) {
+      var oversized = DirectorClient.networkErrorMessage(63)
+      if (cb)
+        cb(oversized, "", 0)
+      else if (job)
+        _handleFlowFailure(job, oversized, 63)
+      _pump()
+      return
+    }
+    var parsed = {
+      body: String(body || ""),
+      status: DirectorClient.parseHttpStatus(statusText)
+    }
     if (exitCode !== 0 && parsed.status <= 0) {
       var net = DirectorClient.networkErrorMessage(exitCode)
       if (cb)
@@ -1397,12 +1478,70 @@ Item {
   }
 
   FileView {
+    id: headerFile
+    path: root.headerPath
+    watchChanges: false
+    atomicWrites: true
+    blockWrites: true
+    printErrors: false
+  }
+
+  FileView {
     id: navBodyFile
     path: root._navBodyPath
     watchChanges: false
     atomicWrites: true
     blockWrites: true
     printErrors: false
+  }
+
+  FileView {
+    id: navHeaderFile
+    path: root._navHeaderPath
+    watchChanges: false
+    atomicWrites: true
+    blockWrites: true
+    printErrors: false
+  }
+
+  FileView {
+    id: responseFile
+    path: root.responsePath
+    watchChanges: false
+    atomicWrites: false
+    printErrors: false
+    onLoaded: {
+      if (!root._httpAwaitingBody)
+        return
+      root._httpAwaitingBody = false
+      root._finishHttp(root._httpExitCode, text(), root._httpStatusText)
+    }
+    onLoadFailed: {
+      if (!root._httpAwaitingBody)
+        return
+      root._httpAwaitingBody = false
+      root._finishHttp(root._httpExitCode, "", root._httpStatusText)
+    }
+  }
+
+  FileView {
+    id: navResponseFile
+    path: root._navResponsePath
+    watchChanges: false
+    atomicWrites: false
+    printErrors: false
+    onLoaded: {
+      if (!root._navAwaitingBody)
+        return
+      root._navAwaitingBody = false
+      root._finishNavBody(root._navExitCode, text())
+    }
+    onLoadFailed: {
+      if (!root._navAwaitingBody)
+        return
+      root._navAwaitingBody = false
+      root._finishNavBody(root._navExitCode, "")
+    }
   }
 
   Process {
@@ -1442,6 +1581,72 @@ Item {
   }
 
   Process {
+    id: chmodResponseProc
+    running: false
+    command: ["chmod", "600", root.responsePath]
+    onExited: {
+      if (!root._httpAwaitingBody)
+        return
+      responseStatProc.command = ["stat", "-c", "%s", root.responsePath]
+      responseStatProc.running = true
+    }
+  }
+
+  Process {
+    id: responseStatProc
+    running: false
+    command: ["true"]
+    stdout: StdioCollector {
+      id: responseStatStdout
+      waitForEnd: true
+    }
+    onExited: {
+      if (!root._httpAwaitingBody)
+        return
+      var n = parseInt(String(responseStatStdout.text || "").trim(), 10)
+      if (DirectorClient.isOversizedBytes(n)) {
+        root._httpAwaitingBody = false
+        root._finishHttp(63, "", "0")
+        return
+      }
+      responseFile.reload()
+    }
+  }
+
+  Process {
+    id: chmodNavResponseProc
+    running: false
+    command: ["chmod", "600", root._navResponsePath]
+    onExited: {
+      if (!root._navAwaitingBody)
+        return
+      navStatProc.command = ["stat", "-c", "%s", root._navResponsePath]
+      navStatProc.running = true
+    }
+  }
+
+  Process {
+    id: navStatProc
+    running: false
+    command: ["true"]
+    stdout: StdioCollector {
+      id: navStatStdout
+      waitForEnd: true
+    }
+    onExited: {
+      if (!root._navAwaitingBody)
+        return
+      var n = parseInt(String(navStatStdout.text || "").trim(), 10)
+      if (DirectorClient.isOversizedBytes(n)) {
+        root._navAwaitingBody = false
+        root._stopNav()
+        return
+      }
+      navResponseFile.reload()
+    }
+  }
+
+  Process {
     id: httpProc
     running: false
     command: ["true"]
@@ -1458,7 +1663,15 @@ Item {
         root._ignoreHttpExit = false
         return
       }
-      root._finishHttp(exitCode, httpStdout.text || "")
+      if (exitCode === 63) {
+        root._finishHttp(63, "", "0")
+        return
+      }
+      root._httpAwaitingBody = true
+      root._httpExitCode = exitCode
+      root._httpStatusText = httpStdout.text || ""
+      chmodResponseProc.command = ["chmod", "600", root.responsePath]
+      chmodResponseProc.running = true
     }
   }
 
@@ -1477,7 +1690,10 @@ Item {
     interval: 50
     repeat: false
     onTriggered: {
-      navChmodProc.command = ["chmod", "600", root._navBodyPath]
+      var files = [root._navHeaderPath]
+      if (root._navQueuedKind === "post")
+        files.push(root._navBodyPath)
+      navChmodProc.command = ["chmod", "600"].concat(files)
       navChmodProc.running = true
     }
   }
@@ -1486,7 +1702,12 @@ Item {
     id: navChmodProc
     running: false
     command: ["chmod", "600", root._navBodyPath]
-    onExited: root._startNavPost()
+    onExited: {
+      if (root._navQueuedKind === "get")
+        root._startNavGet()
+      else if (root._navQueuedKind === "post")
+        root._startNavPost()
+    }
   }
 
   Process {
@@ -1498,7 +1719,7 @@ Item {
       waitForEnd: true
     }
     onExited: function(exitCode) {
-      root._onNavExit(exitCode, navStdout.text || "")
+      root._onNavExit(exitCode)
     }
   }
 

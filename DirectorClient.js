@@ -19,6 +19,59 @@ var STATUS_DIRECTOR_401 = "Director rejected the session (HTTP 401). This is exp
 // so the long-lived shell never retains an unbounded LAN/cloud/nav payload.
 var MAX_RESPONSE_BYTES = 8388608
 
+// Credentials and focus JSON are tiny; cap reads/writes so a replaced symlink,
+// FIFO, or oversized file cannot block or exhaust the long-lived shell.
+var MAX_CREDENTIALS_FILE_BYTES = 65536
+var MAX_FOCUS_FILE_BYTES = 4096
+
+// Graphical Omarchy sessions may not export mise shims to PATH; use an absolute
+// interpreter path for descriptor-level state-file I/O (O_NOFOLLOW, regular
+// file check, bounded read/write, mode 0600 at creation).
+var STATE_FILE_PYTHON = "/usr/bin/python3"
+
+var STATE_FILE_READ_PY = [
+  "import os,stat,sys",
+  "path=sys.argv[1]; maxb=int(sys.argv[2])",
+  "try:",
+  " fd=os.open(path, os.O_RDONLY|os.O_NOFOLLOW)",
+  "except OSError:",
+  " sys.exit(1)",
+  "try:",
+  " st=os.fstat(fd)",
+  " if not stat.S_ISREG(st.st_mode): sys.exit(1)",
+  " if st.st_mode & 0o077: os.fchmod(fd, 0o600)",
+  " if st.st_size > maxb: sys.exit(2)",
+  " data=os.read(fd, maxb+1)",
+  " if len(data) > maxb: sys.exit(2)",
+  " sys.stdout.buffer.write(data)",
+  "finally:",
+  " os.close(fd)"
+].join("\n")
+
+var STATE_FILE_WRITE_PY = [
+  "import os,sys",
+  "path=sys.argv[1]; maxb=int(sys.argv[2])",
+  "data=sys.stdin.buffer.read(maxb+1)",
+  "if len(data)>maxb: sys.exit(2)",
+  "try:",
+  " fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW, 0o600)",
+  "except OSError:",
+  " sys.exit(1)",
+  "try:",
+  " os.write(fd, data)",
+  " os.fchmod(fd, 0o600)",
+  "finally:",
+  " os.close(fd)"
+].join("\n")
+
+function stateFileReadCommand(path, maxBytes) {
+  return [STATE_FILE_PYTHON, "-c", STATE_FILE_READ_PY, String(path || ""), String(maxBytes || 0)]
+}
+
+function stateFileWriteCommand(path, maxBytes) {
+  return [STATE_FILE_PYTHON, "-c", STATE_FILE_WRITE_PY, String(path || ""), String(maxBytes || 0)]
+}
+
 // The one and only command every curl invocation runs. It is a compile-time
 // constant: no URL, token, password, or any other caller-controlled value is
 // ever interpolated into it. Every per-request value arrives on stdin as a

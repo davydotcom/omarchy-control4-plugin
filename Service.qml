@@ -111,6 +111,8 @@ Item {
   // the process's stdin in onStarted; never touches disk.
   property string _httpConfig: ""
   property string _navConfig: ""
+  property string _credWritePayload: ""
+  property string _focusWritePayload: ""
 
   readonly property bool configured: DirectorClient.credentialsComplete(controllerIp, email, password)
   readonly property bool hasToken: _directorToken.length > 0
@@ -221,9 +223,9 @@ Item {
       password: password
     }
     _ignoreCredentialsLoad = true
-    credentialsFile.setText(JSON.stringify(payload, null, 2) + "\n")
-    chmodProc.command = ["chmod", "600", credentialsPath]
-    chmodProc.running = true
+    _credWritePayload = JSON.stringify(payload, null, 2) + "\n"
+    credWriteProc.stdinEnabled = true
+    credWriteProc.running = true
   }
 
   function _setState(next) {
@@ -1071,9 +1073,9 @@ Item {
         payload = { roomId: n }
     }
     _ignoreFocusLoad = true
-    focusFile.setText(JSON.stringify(payload) + "\n")
-    chmodFocusProc.command = ["chmod", "600", root.focusPath]
-    chmodFocusProc.running = true
+    _focusWritePayload = JSON.stringify(payload) + "\n"
+    focusWriteProc.stdinEnabled = true
+    focusWriteProc.running = true
   }
 
   function loadFocus(raw) {
@@ -1407,70 +1409,78 @@ Item {
   onPasswordChanged: if (!_hydrating) _refreshStatusText()
   onHasTokenChanged: _refreshStatusText()
 
-  FileView {
-    id: credentialsFile
-    path: root.credentialsPath
-    // blockWrites makes setText synchronous. Without it, atomicWrites renames a
-    // fresh inode over the one chmodProc already targeted, leaving the plaintext
-    // password world-readable.
-    blockWrites: true
-    watchChanges: false
-    atomicWrites: true
-    printErrors: false
-    onLoaded: root.loadCredentials(text())
-    onLoadFailed: root.loadCredentials("")
-  }
-
-  FileView {
-    id: focusFile
-    path: root.focusPath
-    blockWrites: true
-    watchChanges: false
-    atomicWrites: true
-    printErrors: false
-    onLoaded: root.loadFocus(text())
-    onLoadFailed: root.loadFocus("")
+  Process {
+    id: stateDirProc
+    command: ["install", "-d", "-m", "700", root.stateDir]
+    running: false
+    onExited: credReadProc.running = true
   }
 
   Process {
-    id: mkdirProc
-    command: ["mkdir", "-p", root.stateDir]
+    id: credReadProc
     running: false
-    onExited: {
-      chmodStateDirProc.running = true
-      Qt.callLater(function() {
-        if (credentialsFile)
-          credentialsFile.reload()
-        if (focusFile)
-          focusFile.reload()
-      })
+    command: DirectorClient.stateFileReadCommand(
+      root.credentialsPath, DirectorClient.MAX_CREDENTIALS_FILE_BYTES)
+    stdout: StdioCollector {
+      id: credReadStdout
+      waitForEnd: true
+    }
+    onExited: function(code) {
+      root.loadCredentials(code === 0 ? credReadStdout.text : "")
+      focusReadProc.running = true
     }
   }
 
-  // Defence in depth for the credentials file: even if a future per-file mode
-  // race reopened, nothing outside this user can traverse into the directory.
   Process {
-    id: chmodStateDirProc
+    id: credWriteProc
     running: false
-    command: ["chmod", "700", root.stateDir]
+    command: DirectorClient.stateFileWriteCommand(
+      root.credentialsPath, DirectorClient.MAX_CREDENTIALS_FILE_BYTES)
+    stdinEnabled: true
+    onStarted: {
+      credWriteProc.write(root._credWritePayload)
+      credWriteProc.stdinEnabled = false
+    }
+    onExited: {
+      root._ignoreCredentialsLoad = false
+      root._credWritePayload = ""
+    }
+  }
+
+  Process {
+    id: focusReadProc
+    running: false
+    command: DirectorClient.stateFileReadCommand(
+      root.focusPath, DirectorClient.MAX_FOCUS_FILE_BYTES)
+    stdout: StdioCollector {
+      id: focusReadStdout
+      waitForEnd: true
+    }
+    onExited: function(code) {
+      root.loadFocus(code === 0 ? focusReadStdout.text : "")
+    }
+  }
+
+  Process {
+    id: focusWriteProc
+    running: false
+    command: DirectorClient.stateFileWriteCommand(
+      root.focusPath, DirectorClient.MAX_FOCUS_FILE_BYTES)
+    stdinEnabled: true
+    onStarted: {
+      focusWriteProc.write(root._focusWritePayload)
+      focusWriteProc.stdinEnabled = false
+    }
+    onExited: {
+      root._ignoreFocusLoad = false
+      root._focusWritePayload = ""
+    }
   }
 
   Process {
     id: rmProc
     running: false
     command: ["rm", "-f", root._navCookiePath]
-  }
-
-  Process {
-    id: chmodProc
-    running: false
-    command: ["chmod", "600", root.credentialsPath]
-  }
-
-  Process {
-    id: chmodFocusProc
-    running: false
-    command: ["chmod", "600", root.focusPath]
   }
 
   // Both curl processes run the same compile-time-constant wrapper command.
@@ -1602,5 +1612,5 @@ Item {
     onTriggered: root.refreshVolume()
   }
 
-  Component.onCompleted: mkdirProc.running = true
+  Component.onCompleted: stateDirProc.running = true
 }

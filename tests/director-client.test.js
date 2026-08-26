@@ -12,7 +12,9 @@ const {
   parseHttp, parseHttpStatus, parseAccountToken, parseControllerCommonName, parseDirectorToken,
   classifyProbe, classifyCloudStatus, commandBody,
   curlConfigEscape, curlConfigText, curlNavConfigText, parseStderrMarkers, CURL_WRAPPER_COMMAND,
-  MAX_RESPONSE_BYTES, isOversizedResponse,
+  MAX_RESPONSE_BYTES, MAX_CREDENTIALS_FILE_BYTES, MAX_FOCUS_FILE_BYTES,
+  stateFileReadCommand, stateFileWriteCommand, STATE_FILE_PYTHON,
+  isOversizedResponse,
   networkErrorMessage, isTransientCurl,
   normalizeHost, credentialsComplete, statusTextFor, accountAuthBody,
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
@@ -698,6 +700,16 @@ const sm = surroundModeParams(3)
 assert(sm && sm.SURROUNDMODE === 3 && sm.OUTPUT === 4000, "surroundModeParams")
 assert(surroundModeParams("nope") === null, "surroundModeParams rejects NaN")
 
+assert(MAX_CREDENTIALS_FILE_BYTES === 65536, "credentials byte cap")
+assert(MAX_FOCUS_FILE_BYTES === 4096, "focus byte cap")
+assert(STATE_FILE_PYTHON === "/usr/bin/python3", "absolute python path")
+const readCmd = stateFileReadCommand("/tmp/creds.json", 1024)
+assert(readCmd[0] === "/usr/bin/python3" && readCmd[2].includes("O_NOFOLLOW")
+  && readCmd[3] === "/tmp/creds.json" && readCmd[4] === "1024", "stateFileReadCommand")
+const writeCmd = stateFileWriteCommand("/tmp/focus.json", 4096)
+assert(writeCmd[0] === "/usr/bin/python3" && writeCmd[2].includes("O_NOFOLLOW")
+  && writeCmd[3] === "/tmp/focus.json" && writeCmd[4] === "4096", "stateFileWriteCommand")
+
 const panelQml = fs.readFileSync(path.join(__dirname, "..", "Panel.qml"), "utf8")
 assert(!/[\u25B6\u23F8\u23ED\u23EE\u23EA\u23E9]/.test(panelQml),
   "transport labels must not use color-emoji media symbols")
@@ -711,5 +723,10 @@ assert(!/width:\s*2[\s\S]{0,160}haloAccent/.test(panelQml),
 assert(panelQml.includes("fillColor: root.haloAccent")
   && panelQml.includes("knobColor: root.haloAccent"),
   "volume slider keeps halo accent")
+
+const serviceQml = fs.readFileSync(path.join(__dirname, "..", "Service.qml"), "utf8")
+assert(!serviceQml.includes("FileView"), "state files must not use FileView")
+assert(serviceQml.includes("stateFileReadCommand"), "bounded state read")
+assert(serviceQml.includes("stateFileWriteCommand"), "bounded state write")
 
 console.log("ok")

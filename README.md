@@ -26,8 +26,11 @@ State lives under
 `$HOME/.local/state/omarchy/io.github.davydotcom.control4/` (mode 700). Only
 these files are persisted:
 
-- `credentials.json` (mode 600) — controller IP, email, and password
-- `focus.json` (mode 600) — `{"roomId": 9}` only; no password, JWT, or room name
+- `credentials.json` (mode 600) — controller IP, email, and password; read and
+  written through bounded descriptor-level I/O (`O_NOFOLLOW`, regular-file check,
+  byte cap) so a symlink or oversized replacement cannot block the shell
+- `focus.json` (mode 600) — `{"roomId": 9}` only; no password, JWT, or room name;
+  same bounded I/O path as credentials
 - `nav-cookies.txt` (mode 600) — short-lived navigator session cookie while
   connected; removed when you Disconnect from the panel gear menu
 

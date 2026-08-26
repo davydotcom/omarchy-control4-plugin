@@ -2,7 +2,7 @@
 title: Control4 focused-room remote
 slug: control4-focused-room-remote
 type: initiative
-status: planning
+status: completed
 domain: engineering
 size: giant
 tags: [omarchy, control4, bar-widget, av]
@@ -22,6 +22,7 @@ child:
   - room-volume-mute-off
   - halo-panel-chrome
   - room-now-playing
+completed_at: 2026-08-23T21:06:12Z
 ---
 # Control4 focused-room remote
 

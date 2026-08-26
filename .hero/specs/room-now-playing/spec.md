@@ -2,7 +2,7 @@
 title: Room now playing
 slug: room-now-playing
 type: feature
-status: delivering
+status: completed
 domain: engineering
 size: small
 horizon: now
@@ -21,6 +21,7 @@ created: 2026-08-21
 tags: [omarchy, control4]
 claimed_by: david-estes
 claimed_at: 2026-08-23T17:03:05-04:00
+completed_at: 2026-08-23T21:06:12Z
 ---
 # Room now playing
 
@@ -38,11 +39,11 @@ The focused room’s power and current Watch/Listen source are legible without s
 
 Show room on/off on the Control4 mark and name the playing source in the panel status line and tooltip.
 
-**Status:** delivering — code landed; close the verify gate.
+**Status:** completed — mark, status line, and Off reflection shipped.
 
-**Pick up at:** `hero spec verify room-now-playing --skip-tests`
+**Pick up at:** glance the live bar: Off → white mark and `Off`; Watch a source → 4-Ball and `Watch · <name>`.
 
-→ `/deliver room-now-playing`
+→ done
 
 **Files:** `DirectorClient.js:434`, `Service.qml:84`, `Panel.qml:47`, `BarWidget.qml:18`, `tests/director-client.test.js:332`
 
@@ -151,3 +152,45 @@ node tests/director-client.test.js
 Live copy of QML/JS + both PNGs, then `omarchy restart shell` if the icons are new to the live folder.
 
 Manual: focused room Off → white mark, tooltip `… — Off`, panel status `Off`, Off row selected. Watch a source → official 4-Ball, tooltip names the source, panel `Watch · <name>`, that source row chosen. Listen → `Listen · <name>` from `PLAYING_AUDIO_DEVICE`, not Digital Media. Disconnect / no room → faded white mark. Room name only in the tooltip and the panel title.
+
+## Completion Ledger
+
+Chip is the Control4 mark (on/off/faded). Panel status and tooltip name the playing source or Off. Off is chosen when the room is off. Same 2s variables poll — no second timer, no media_sessions.
+
+**Validation**
+- `node tests/director-client.test.js` — pass (`ok`)
+- Live copy of QML/JS + both PNGs into `~/.config/omarchy/plugins/io.github.davydotcom.control4/` on 2026-08-23
+
+### Acceptance Criteria
+
+| # | Criterion (abbreviated) | Status | Note |
+|---|---|---|---|
+| 1 | Keep the existing room-variables poll; no second Timer / media_sessions | DONE | `Service.qml:919` same GET; only `volumeTimer` at `:1566` interval 2000; no `media_sessions` in repo |
+| 2 | POWER_STATE 0 → white mark, panel `Off`, no source name | DONE | `nowPlayingLabel` empty when power false (`DirectorClient.js:435-436`, test `:346`); `panelStatus` `Off` (`Panel.qml:50-51`); chip `icon-off.png` when `!roomOn` (`BarWidget.qml:139-146`) |
+| 3 | On + listen → PLAYING_AUDIO_DEVICE name in status and tooltip | DONE | `nowPlayingLabel` listen branch (`DirectorClient.js:437-440`, test `:362`); `panelStatus` `Listen ·` (`Panel.qml:55-57`); tooltip (`BarWidget.qml:24-27`) |
+| 4 | On + watch source → that name in status and tooltip | DONE | watch via `matchWatchSourceId` (`DirectorClient.js:441-444`, test `:353`); `panelStatus` `Watch ·` (`Panel.qml:56-57`) |
+| 5 | Not connected / no room → faded white mark, distinct from room-off | DONE | `hasFocusedRoom` false → opacity 0.55 and `!roomOn` white mark (`BarWidget.qml:16-17,125,146`); connected+off is opacity 1.0 |
+| 6 | SHALL NOT spell room or source as chip text | DONE | `labelVisible: false` (`BarWidget.qml:113`); only Images in the chip |
+| 7 | Room off → Off row chosen, source rows not chosen | DONE | Off `chosen: roomOn === false` (`Panel.qml:640`); source `chosen` requires `roomOn !== false` (`Panel.qml:670-674`) |
+| 8 | Off tap shows off chip and Off status before next poll | DONE | `roomOff()` sets `roomOn = false` and clears `playingSourceName` before POST (`Service.qml:902-905`) |
+
+### Changes
+
+| # | Changes item (abbreviated) | Status | Note |
+|---|---|---|---|
+| 1 | `nowPlayingLabel` in DirectorClient.js | DONE | `DirectorClient.js:413-447`; reuses `matchWatchSourceId` |
+| 2 | nowPlayingLabel fixtures | DONE | `tests/director-client.test.js:332-372` |
+| 3 | Service `playingSourceName` + optimistic off/select | DONE | `Service.qml:84,150,241,288-296,902-905,930` |
+| 4 | Panel status + Off/source chosen | DONE | `Panel.qml:47-62,640,670-674` |
+| 5 | BarWidget tooltip + dual-Image mark | DONE | `BarWidget.qml:18-31,116-149` |
+| 6 | icon.png / icon-off.png in the plugin copy set | DONE | copied to live plugin 2026-08-23; README install list already names them |
+| 7 | README leftover room-name chip sentence | DONE | `README.md:13-16,99-101` |
+| 8 | halo-remote-panel-style example + bar-chip exception | DONE | convention example `Listen · Apple Music` / Off; Exceptions name both PNGs |
+
+### Exercise-the-feature check
+
+- [x] `node tests/director-client.test.js` printed `ok` (off/watch/listen/unknown label cases). Live plugin files copied 2026-08-23. GUI glance is the user's next bar/panel open (existing QML hot-reloads).
+
+### Excellence Bar self-check
+
+Yes — the name resolver refuses stale sources when the room is off, Listen cannot say Digital Media, and Off is a selected state rather than a muted control.

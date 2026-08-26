@@ -9,6 +9,7 @@ tags: [omarchy, control4, networking]
 relates-to:
   - control4-focused-room-remote
   - director-session
+  - stream-curl-transport
 ---
 # In-process Director REST
 
@@ -28,7 +29,15 @@ The original wording was "QML/JS + Qt Network." First-party Omarchy HTTP is not 
 
 ## Decision
 
-Talk to Control4 in-process via QML/JS driving short-lived `curl` through Quickshell `Process`. Cloud APIs (`apis.control4.com`): TLS verify on. LAN Director (`https://<ip>/api/v1/...`): `-k` required. No HA dependency and no Python sidecar. POST bodies go to a 0600 temp file (`--data-binary @path`) so passwords never appear in `Process.command` argv. Bearer and navigator JWT headers go the same way: write a 0600 header file and pass `-H @path` — never put tokens in argv. Response bodies go to `-o` (mode 600) with `curl --max-filesize`; `StdioCollector` keeps only `%{http_code}`. Refuse to load a file larger than that cap so a large LAN/cloud/nav payload cannot exhaust the long-lived shell. Never log tokens or passwords.
+Talk to Control4 in-process via QML/JS driving short-lived `curl` through Quickshell `Process`. Cloud APIs (`apis.control4.com`): TLS verify on. LAN Director (`https://<ip>/api/v1/...`): `-k` required. No HA dependency and no Python sidecar.
+
+Nothing that is pure transport touches disk. The whole request — URL, repeated headers, and body — is written to `curl -K -` over **stdin**, so no password, bearer token, or navigator JWT ever appears in `Process.command` argv. The response body streams back on stdout through a bounded pipe (`head -c` at `MAX_RESPONSE_BYTES + 1`), so an oversized LAN/cloud/nav payload is truncated and rejected rather than retained in the long-lived shell; `--max-filesize` still aborts early when the response declares an oversized `Content-Length`. The HTTP status (`%{stderr}%{http_code}`) and curl's own exit code arrive as markers on stderr, which the pipe does not carry.
+
+The curl command array is a compile-time constant with zero interpolation — that is what makes wrapping it in `sh -c` acceptable, and it is an invariant, not an incidental detail. Every per-request value goes over stdin. The shell's `umask 077` means any file curl itself creates (the navigator cookie jar) is mode 0600 at creation.
+
+Only genuine cross-restart state is persisted: `credentials.json` and `focus.json` (both 0600, in a 0700 state dir), plus the navigator cookie jar, which is removed on disconnect. Never log tokens or passwords.
+
+**Amended** by `stream-curl-transport` (2026-08-25), which replaced the original 0600 body/header temp files and `-o` response files with the stdin-config transport above. The rest of this decision — in-process `Process` + `curl`, `-k` for the LAN Director, TLS verify on for the cloud, no sidecar — is unchanged.
 
 ## Consequences
 

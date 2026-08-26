@@ -10,8 +10,9 @@ const ctx = vm.createContext({})
 vm.runInContext(src, ctx)
 const {
   parseHttp, parseHttpStatus, parseAccountToken, parseControllerCommonName, parseDirectorToken,
-  classifyProbe, classifyCloudStatus, commandBody, curlArgs, withHeaderFile,
-  authHeaderText, navHeaderText, MAX_RESPONSE_BYTES, isOversizedResponse, isOversizedBytes,
+  classifyProbe, classifyCloudStatus, commandBody,
+  curlConfigEscape, curlConfigText, curlNavConfigText, parseStderrMarkers, CURL_WRAPPER_COMMAND,
+  MAX_RESPONSE_BYTES, isOversizedResponse,
   networkErrorMessage, isTransientCurl,
   normalizeHost, credentialsComplete, statusTextFor, accountAuthBody,
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
@@ -20,7 +21,7 @@ const {
   extractSources, sourceArray, parseRoomVolume, nowPlayingLabel, parseRemoteCapabilities, hasRemoteCommand,
   itemForWatchRemote, findItemById, hasWatchRemoteUi, surroundModeParams, matchWatchSourceId,
   parseEngineIoSid, parseSocketIoClientId, parseMspResponse, parseMspResponses, mspArgXml,
-  parseMspTabs, parseMspList, parseMspNextScreen, isAppleMusicItem, mspPlayCommand, curlNavArgs,
+  parseMspTabs, parseMspList, parseMspNextScreen, isAppleMusicItem, mspPlayCommand,
   isTuneInItem, driverXmlPath, parseTuneInTabs, parseTuneInList, tuneInTapArgs
 } = ctx
 
@@ -72,32 +73,162 @@ assert(classifyCloudStatus(401).kind === "sign-in", "cloud 401")
 const post = JSON.parse(commandBody("SELECT_AUDIO_DEVICE", { deviceid: 9 }))
 assert(post.async === true && post.command === "SELECT_AUDIO_DEVICE" && post.tParams.deviceid === 9, "commandBody")
 
-const args = curlArgs({
-  url: "https://example", insecure: true, bodyPath: "/tmp/body.json",
-  headerPath: "/tmp/http-header", outputPath: "/tmp/http-response"
-})
-assert(args.indexOf("-k") !== -1, "curl -k")
-assert(args.indexOf("-f") === -1, "no curl -f")
-assert(args.indexOf("--max-filesize") !== -1, "curl max-filesize")
-assert(args[args.indexOf("--max-filesize") + 1] === String(MAX_RESPONSE_BYTES), "curl max-filesize value")
-assert(args.indexOf("-o") !== -1 && args[args.indexOf("-o") + 1] === "/tmp/http-response", "curl body to file")
-assert(args.indexOf("-w") !== -1 && args[args.indexOf("-w") + 1] === "%{http_code}", "curl status on stdout")
-assert(args.indexOf("@/tmp/http-header") !== -1, "auth via header file")
-assert(args.join(" ").indexOf("Bearer") === -1, "no bearer token in argv")
-assert(args.join(" ").indexOf("secret") === -1, "no secret in argv template")
-assert(JSON.stringify(args).indexOf("password") === -1, "no password in argv template")
+// ---------------------------------------------------------------------------
+// curl transport: the wrapper command is constant, every per-request value
+// travels in the stdin config.
+// ---------------------------------------------------------------------------
 
-const authed = withHeaderFile(["curl", "https://x"], "/tmp/http-header")
-assert(authed.indexOf("-H") !== -1, "auth header flag")
-assert(authed.indexOf("@/tmp/http-header") !== -1, "auth header file path")
-assert(authed.join(" ").indexOf("TOKEN") === -1, "token not in withHeaderFile argv")
-assert(authHeaderText("TOKEN") === "Authorization: Bearer TOKEN\n", "authHeaderText")
-assert(navHeaderText("TOKEN") === "Authorization: Bearer TOKEN\nJWT: TOKEN\n", "navHeaderText")
+// Applies curl's config-file un-escape rules to a quoted value, so escaping can
+// be asserted as a byte-exact round-trip rather than against a golden string.
+function curlUnescape(s) {
+  let out = ""
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] !== "\\") { out += s[i]; continue }
+    const n = s[++i]
+    if (n === "\\") out += "\\"
+    else if (n === "\"") out += "\""
+    else if (n === "t") out += "\t"
+    else if (n === "n") out += "\n"
+    else if (n === "r") out += "\r"
+    else if (n === "v") out += "\v"
+    else out += n
+  }
+  return out
+}
+
+function configValue(text, key) {
+  const m = text.match(new RegExp("^" + key + " = \"((?:[^\"\\\\]|\\\\.)*)\"$", "m"))
+  return m ? m[1] : null
+}
+
+function configValues(text, key) {
+  const re = new RegExp("^" + key + " = \"((?:[^\"\\\\]|\\\\.)*)\"$", "mg")
+  const out = []
+  let m
+  while ((m = re.exec(text)) !== null) out.push(m[1])
+  return out
+}
+
+// -- curlConfigEscape (AC-4) ------------------------------------------------
+assert(curlConfigEscape("") === "", "escape empty string")
+assert(curlConfigEscape(null) === "", "escape null")
+assert(curlConfigEscape("plain text 123") === "plain text 123", "escape leaves plain text alone")
+assert(curlConfigEscape("\\") === "\\\\", "escape a lone backslash")
+assert(curlConfigEscape("\"") === "\\\"", "escape a lone quote")
+// The JSON case: \" must become \\\" (backslash-first), never \\" (quote-first).
+assert(curlConfigEscape("\\\"") === "\\\\\\\"", "escape backslash before quote")
+assert(curlConfigEscape("\\\"") !== "\\\\\"", "quote-first ordering would corrupt \\\"")
+;[
+  "",
+  "no specials",
+  "\\",
+  "\"",
+  "\\\"",
+  "a\"b\\c\"\\d",
+  "{\"k\":\"v\\\\n\"}",
+  accountAuthBody("u\"ser@x.com", "p\"a\\ss\nw\tor$d`x")
+].forEach((raw, i) => {
+  assert(curlUnescape(curlConfigEscape(raw)) === raw, "escape round-trips byte-for-byte [" + i + "]")
+})
+
+// -- curlConfigText (AC-1, AC-2, AC-5, AC-9) --------------------------------
+const cfg = curlConfigText({
+  url: "https://example/api", insecure: true,
+  body: commandBody("SELECT_AUDIO_DEVICE", { deviceid: 9 }), token: "TOKEN"
+})
+assert(configValues(cfg, "header").filter(h => h === "Authorization: Bearer TOKEN").length === 1,
+  "bearer token appears exactly once as a header line")
+assert(/^insecure$/m.test(cfg), "insecure present when requested")
+assert(!/^insecure$/m.test(curlConfigText({ url: "https://apis.control4.com/x" })),
+  "insecure absent for the cloud host")
+assert(/^silent$/m.test(cfg) && /^show-error$/m.test(cfg), "silent and show-error (the -sS equivalent)")
+assert(configValue(cfg, "max-time") === "20", "director max-time is 20")
+assert(configValue(cfg, "max-filesize") === String(MAX_RESPONSE_BYTES), "max-filesize is MAX_RESPONSE_BYTES")
+assert(configValue(cfg, "write-out").indexOf("%{stderr}") !== -1
+  && configValue(cfg, "write-out").indexOf("HTTP:") !== -1, "write-out puts the HTTP marker on stderr")
+assert(!/^request = /m.test(cfg), "no explicit request method — POST stays implied by data-binary")
+assert(configValues(cfg, "header").indexOf("Content-Type: application/json") !== -1, "json content type with a body")
+assert(curlUnescape(configValue(cfg, "data-binary")) === commandBody("SELECT_AUDIO_DEVICE", { deviceid: 9 }),
+  "body round-trips through the config")
+assert(configValue(cfg, "url") === "https://example/api", "url in the config")
+
+const cfgGet = curlConfigText({ url: "https://example/get", token: "TOKEN" })
+assert(configValue(cfgGet, "data-binary") === null, "no data-binary without a body")
+assert(configValues(cfgGet, "header").indexOf("Content-Type: application/json") === -1,
+  "no content type without a body")
+
+const cfgBare = curlConfigText({ url: "https://example/bare" })
+assert(configValues(cfgBare, "header").length === 0, "no headers without a token or body")
+
+// AC-5: data-binary must never be allowed to read a file.
+let atRejected = false
+try { curlConfigText({ url: "https://x", body: "@/etc/passwd" }) } catch (e) { atRejected = true }
+assert(atRejected, "a body beginning with @ is rejected, not treated as a filename")
+let atRejectedNav = false
+try { curlNavConfigText({ url: "https://x", body: "@/etc/passwd" }) } catch (e) { atRejectedNav = true }
+assert(atRejectedNav, "nav body beginning with @ is rejected too")
+
+// A password carrying a quote must survive into the config as valid JSON.
+const authCfg = curlConfigText({
+  url: "https://apis.control4.com/auth", body: accountAuthBody("u@x.com", "pa\"ss\\word")
+})
+assert(JSON.parse(curlUnescape(configValue(authCfg, "data-binary"))).clientInfo.userInfo.password === "pa\"ss\\word",
+  "a quoted password round-trips as valid JSON")
+
+// -- curlNavConfigText (AC-9) -----------------------------------------------
+const navCfg = curlNavConfigText({
+  url: "https://x/socket.io", insecure: true, maxTime: 12,
+  cookiePath: "/state/nav-cookies.txt", token: "SECRET", body: "40"
+})
+const navHeaders = configValues(navCfg, "header")
+assert(navHeaders.indexOf("Authorization: Bearer SECRET") !== -1, "nav bearer header")
+assert(navHeaders.indexOf("JWT: SECRET") !== -1, "nav JWT header")
+assert(configValue(navCfg, "max-time") === "12", "nav max-time honours opts.maxTime")
+assert(configValue(curlNavConfigText({ url: "https://x" }), "max-time") === "35", "nav max-time defaults to 35")
+assert(configValue(navCfg, "cookie") === "/state/nav-cookies.txt", "nav cookie jar read")
+assert(configValue(navCfg, "cookie-jar") === "/state/nav-cookies.txt", "nav cookie jar write")
+assert(configValue(curlNavConfigText({ url: "https://x" }), "cookie") === null, "no cookie lines without a path")
+assert(navHeaders.indexOf("Content-Type: text/plain") !== -1, "nav content type defaults to text/plain")
+assert(configValues(curlNavConfigText({ url: "https://x", body: "40", contentType: "application/xml" }), "header")
+  .indexOf("Content-Type: application/xml") !== -1, "nav content type is overridable")
+assert(configValue(navCfg, "write-out") === null, "nav config carries no write-out")
+assert(configValue(navCfg, "max-filesize") === String(MAX_RESPONSE_BYTES), "nav max-filesize")
+assert(/^insecure$/m.test(navCfg), "nav insecure for the LAN Director")
+
+// -- secret containment (AC-1, AC-2) ----------------------------------------
+const wrapper = CURL_WRAPPER_COMMAND.join(" ")
+assert(wrapper.indexOf("SECRET") === -1 && wrapper.indexOf("TOKEN") === -1,
+  "no token sentinel in the wrapper command")
+assert(wrapper.indexOf("Bearer") === -1 && wrapper.indexOf("JWT") === -1,
+  "no auth header in the wrapper command")
+assert(wrapper.indexOf("password") === -1 && wrapper.indexOf("https") === -1,
+  "no password or URL in the wrapper command")
+// The wrapper is a compile-time constant: identical for every request.
+assert(JSON.stringify(CURL_WRAPPER_COMMAND) === JSON.stringify([
+  "sh", "-c", "umask 077; { curl -sS -K -; echo \"RC:$?\" >&2; } | head -c " + (MAX_RESPONSE_BYTES + 1)
+]), "wrapper command is the constant, capped at MAX_RESPONSE_BYTES + 1")
+// ...and the sentinels live only in the config text.
+assert(cfg.indexOf("TOKEN") !== -1, "token reaches the config text")
+assert(navCfg.indexOf("SECRET") !== -1, "jwt reaches the config text")
+
+// -- parseStderrMarkers (AC-7, AC-8) ----------------------------------------
+const mOk = parseStderrMarkers("HTTP:200\nRC:0\n")
+assert(mOk.status === 200 && mOk.exitCode === 0, "clean markers")
+const mErr = parseStderrMarkers("curl: (28) Operation timed out after 20003 milliseconds\nHTTP:000\nRC:28\n")
+assert(mErr.status === 0 && mErr.exitCode === 28, "markers survive leading curl error text")
+const mResolve = parseStderrMarkers("curl: (6) Could not resolve host: nope.invalid\nHTTP:000\nRC:6\n")
+assert(mResolve.status === 0 && mResolve.exitCode === 6, "resolve failure exit code")
+assert(parseStderrMarkers("RC:7\n").status === 0, "missing HTTP marker yields status 0")
+assert(parseStderrMarkers("HTTP:404\n").exitCode === 0, "missing RC marker yields exit code 0")
+assert(parseStderrMarkers("").status === 0 && parseStderrMarkers("").exitCode === 0, "empty stderr")
+assert(parseStderrMarkers(null).exitCode === 0, "null stderr")
+const mDup = parseStderrMarkers("HTTP:301\nRC:0\nHTTP:200\nRC:52\n")
+assert(mDup.status === 200 && mDup.exitCode === 52, "duplicated markers take the last")
+// Risk 4: the retry path must still see curl's own exit codes.
+assert(isTransientCurl(parseStderrMarkers("HTTP:000\nRC:56\n").exitCode), "transient curl code survives the marker round trip")
+
 assert(isOversizedResponse("x".repeat(MAX_RESPONSE_BYTES + 1)), "oversized response")
 assert(!isOversizedResponse("ok"), "small response not oversized")
-assert(isOversizedBytes(MAX_RESPONSE_BYTES + 1), "oversized bytes")
-assert(!isOversizedBytes(12), "small bytes not oversized")
-assert(!isOversizedBytes("nope"), "invalid size not oversized")
 assert(networkErrorMessage(63) === "Response too large", "max-filesize message")
 assert(!isTransientCurl(63), "oversized not transient")
 
@@ -435,17 +566,6 @@ assert(tapArgs.screen === "Browse" && tapArgs.URL === "http://opml/Tune.ashx?id=
   && tapArgs.text === "90.1 | WFYI" && tapArgs.image === "http://logo.png",
   "tuneInTapArgs mirrors driver Browse action params")
 assert(tuneInTapArgs(tuneInFolder[0]).key === "local", "tuneInTapArgs carries key")
-const navArgs = curlNavArgs({
-  url: "https://x/socket.io", insecure: true, maxTime: 35,
-  headerPath: "/tmp/nav-header", outputPath: "/tmp/nav-response", jwt: "SECRET"
-})
-assert(navArgs.indexOf("-k") !== -1 && navArgs.indexOf("--max-time") !== -1, "curlNavArgs")
-assert(navArgs.indexOf("--max-filesize") !== -1, "curlNavArgs max-filesize")
-assert(navArgs.indexOf("@/tmp/nav-header") !== -1, "curlNavArgs header file")
-assert(navArgs.indexOf("-o") !== -1 && navArgs[navArgs.indexOf("-o") + 1] === "/tmp/nav-response", "curlNavArgs body to file")
-assert(navArgs.join(" ").indexOf("SECRET") === -1, "jwt not in curlNavArgs argv")
-assert(navArgs.join(" ").indexOf("JWT:") === -1, "JWT header not in argv")
-
 const NAV = ["MENU", "UP", "DOWN", "LEFT", "RIGHT", "ENTER"]
 const TRANSPORT = ["PLAY", "STOP", "PAUSE", "SKIP_FWD", "SKIP_REV", "SCAN_FWD", "SCAN_REV"]
 const DIGITS = ["NUMBER_0", "NUMBER_1", "NUMBER_2", "NUMBER_3", "NUMBER_4",

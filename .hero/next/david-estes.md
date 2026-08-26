@@ -1,6 +1,6 @@
 ---
 user: david-estes
-updated: 2026-08-24T12:01:01Z
+updated: 2026-08-26T00:15:39Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
@@ -10,15 +10,19 @@ repo: davydotcom/omarchy-control4-plugin
 
 > Listen Apple Music should list personal stations via MSP navigator, not fake folders
 
-_possibly stale — 9 commit(s) since, last set 21h 47m ago_
+_possibly stale — 10 commit(s) since, last set 2d 10h ago_
 
 ## Last user ask
 
-> Review and fix the Control4 omarchyplugins.com marketplace submission security comment (JWT in curl argv + unbounded StdioCollector responses) so we can release.
+> can you check the latest comment on gh issue https://github.com/HANCORE-linux/omarchy-plugin-marketplace/issues/1941 for this project and determine if its valid.
 
 ## Suggested next prompt
 
-> Push the curl argv/token + response-size fix, then reply on HANCORE-linux/omarchy-plugin-marketplace#1941 so they can re-review Control4.
+> let's tackle Add room to source
+
+_Rationale: highest-priority open feature: Add room to source (`add-room-to-source`)_
+
+_Source: auto-derived from open feature — `hero next suggest "..."` to override._
 
 ## Recent reflections
 

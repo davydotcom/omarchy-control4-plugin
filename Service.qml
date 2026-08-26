@@ -13,9 +13,6 @@ Item {
   readonly property string stateDir: home + "/.local/state/omarchy/" + pluginId
   readonly property string credentialsPath: stateDir + "/credentials.json"
   readonly property string focusPath: stateDir + "/focus.json"
-  readonly property string bodyPath: stateDir + "/http-body.json"
-  readonly property string headerPath: stateDir + "/http-header"
-  readonly property string responsePath: stateDir + "/http-response"
 
   property string sessionState: "unconfigured"
   property string statusText: DirectorClient.STATUS_NOT_CONFIGURED
@@ -72,11 +69,8 @@ Item {
   property int _navWaitSeq: 0
   property var _navWaitCb: null
   property bool _navIgnoreExit: false
-  property string _navBodyPath: stateDir + "/nav-body.txt"
+  property bool _navRestartPending: false
   property string _navCookiePath: stateDir + "/nav-cookies.txt"
-  property string _navHeaderPath: stateDir + "/nav-header"
-  property string _navResponsePath: stateDir + "/nav-response"
-  property string _navQueuedKind: ""
   property string _navQueuedUrl: ""
   property int _navQueuedMaxTime: 35
   property int _navPostMaxTime: 12
@@ -95,6 +89,7 @@ Item {
   property bool _wantSourceRestore: false
   property var _volumeHoldUntil: 0
   property int _volumeGen: 0
+  property bool _volumePending: false
 
   property string _accountToken: ""
   property string _directorToken: ""
@@ -107,17 +102,15 @@ Item {
   property bool _focusLoaded: false
   property bool _ignoreFocusLoad: false
   property int _roomsGen: 0
-  property int _httpGen: 0
   property int _errorRetries: 0
   property var _queue: []
   property var _pending: null
   property var _pendingCallback: null
   property bool _ignoreHttpExit: false
-  property bool _httpAwaitingBody: false
-  property int _httpExitCode: 0
-  property string _httpStatusText: ""
-  property bool _navAwaitingBody: false
-  property int _navExitCode: 0
+  // The curl config text for the request currently being started. Written to
+  // the process's stdin in onStarted; never touches disk.
+  property string _httpConfig: ""
+  property string _navConfig: ""
 
   readonly property bool configured: DirectorClient.credentialsComplete(controllerIp, email, password)
   readonly property bool hasToken: _directorToken.length > 0
@@ -161,6 +154,7 @@ Item {
     roomOn = null
     playingSourceName = ""
     volumeTimer.stop()
+    rmProc.running = true
     _setState("unconfigured")
   }
 
@@ -168,18 +162,13 @@ Item {
     _queue = []
     _pending = null
     _pendingCallback = null
-    _httpGen += 1
-    _httpAwaitingBody = false
+    // The in-flight volume request's callback will never run, so its guard has
+    // to be released here or the 2 s poll would never issue another request.
+    _volumePending = false
     if (httpProc.running) {
       _ignoreHttpExit = true
       httpProc.running = false
     }
-    if (chmodBodyProc.running)
-      chmodBodyProc.running = false
-    if (chmodResponseProc.running)
-      chmodResponseProc.running = false
-    if (responseStatProc.running)
-      responseStatProc.running = false
     _stopNav()
     closeBrowse()
     closeRemote()
@@ -758,8 +747,23 @@ Item {
     _navSid = ""
     _navClientId = ""
     _navSubId = ""
-    navTouch.command = ["touch", _navCookiePath]
-    navTouch.running = true
+    // No touch needed: `cookie` on a nonexistent path is a no-op, and the curl
+    // wrapper's `umask 077` creates the jar 0600 when `cookie-jar` first writes.
+    //
+    // _stopNav() only *requests* termination: Quickshell keeps Process.running
+    // true until the child actually exits, and a running = true that lands
+    // before then is silently dropped. Measured on Quickshell 0.3.1. So when a
+    // long poll is still live — the reconnect-while-browsing path — hand the
+    // handshake off to its exit signal instead of starting it here.
+    if (navProc.running) {
+      _navRestartPending = true
+      return
+    }
+    _navHandshake()
+  }
+
+  function _navHandshake() {
+    _navGet("/socket.io/?EIO=4&transport=polling", 12)
   }
 
   function _stopNav() {
@@ -767,19 +771,11 @@ Item {
     _navSid = ""
     _navClientId = ""
     _navSubId = ""
-    _navQueuedKind = ""
     _navQueuedUrl = ""
-    _navAwaitingBody = false
+    _navRestartPending = false
     _navIgnoreExit = true
-    navPostDelay.stop()
     if (navProc.running)
       navProc.running = false
-    if (navChmodProc.running)
-      navChmodProc.running = false
-    if (chmodNavResponseProc.running)
-      chmodNavResponseProc.running = false
-    if (navStatProc.running)
-      navStatProc.running = false
   }
 
   function _navSocketUrl() {
@@ -791,75 +787,66 @@ Item {
 
   function _navGet(path, maxTime) {
     var url = path.indexOf("https:") === 0 ? path : DirectorClient.directorUrl(controllerIp, path)
-    root._navQueuedKind = "get"
     root._navQueuedUrl = url
     root._navQueuedMaxTime = maxTime || 35
-    navHeaderFile.setText(DirectorClient.navHeaderText(_directorToken))
-    navPostDelay.restart()
+    _startNavGet()
   }
 
   function _navPostRaw(body, maxTime) {
-    root._navQueuedKind = "post"
     root._navPostMaxTime = maxTime || 12
-    navHeaderFile.setText(DirectorClient.navHeaderText(_directorToken))
-    navBodyFile.setText(String(body || ""))
-    navPostDelay.restart()
+    _startNavPost(String(body || ""))
   }
 
   function _startNavGet() {
     if (!root._navPhase)
       return
-    var args = DirectorClient.curlNavArgs({
+    root._navConfig = DirectorClient.curlNavConfigText({
       url: root._navQueuedUrl,
       insecure: true,
       maxTime: root._navQueuedMaxTime,
       cookiePath: root._navCookiePath,
-      headerPath: root._navHeaderPath,
-      outputPath: root._navResponsePath
+      token: root._directorToken
     })
     root._navIgnoreExit = false
-    navProc.command = args
+    navProc.stdinEnabled = true
     navProc.running = true
   }
 
-  function _startNavPost() {
+  function _startNavPost(body) {
     if (!root._navPhase)
       return
-    var args = DirectorClient.curlNavArgs({
+    root._navConfig = DirectorClient.curlNavConfigText({
       url: root._navSocketUrl(),
       insecure: true,
       maxTime: root._navPostMaxTime,
-      bodyPath: root._navBodyPath,
+      body: body,
       contentType: "text/plain",
       cookiePath: root._navCookiePath,
-      headerPath: root._navHeaderPath,
-      outputPath: root._navResponsePath
+      token: root._directorToken
     })
     root._navIgnoreExit = false
-    navProc.command = args
+    navProc.stdinEnabled = true
     navProc.running = true
   }
 
   function _onNavExit(exitCode) {
     if (_navIgnoreExit) {
       _navIgnoreExit = false
+      if (_navRestartPending) {
+        _navRestartPending = false
+        if (_navPhase === "handshake")
+          _navHandshake()
+      }
       return
     }
     if (exitCode === 63) {
       _stopNav()
       return
     }
-    _navAwaitingBody = true
-    _navExitCode = exitCode
-    chmodNavResponseProc.command = ["chmod", "600", root._navResponsePath]
-    chmodNavResponseProc.running = true
+    _finishNavBody(navStdout.text)
   }
 
-  function _finishNavBody(exitCode, stdout) {
-    if (_navIgnoreExit) {
-      _navIgnoreExit = false
-      return
-    }
+  function _finishNavBody(stdout) {
     var text = String(stdout || "")
     if (DirectorClient.isOversizedResponse(text)) {
       _stopNav()
@@ -971,10 +958,14 @@ Item {
       return
     }
     volumeTimer.restart()
+    if (root._volumePending)
+      return
+    root._volumePending = true
     root._volumeGen += 1
     var gen = root._volumeGen
     var id = focusedRoomId
     directorGet("/api/v1/items/" + id + "/variables?varnames=CURRENT_VOLUME,IS_MUTED,POWER_STATE,CURRENT_VIDEO_DEVICE,PLAYING_AUDIO_DEVICE,LAST_DEVICE_GROUP", function(err, body) {
+      root._volumePending = false
       if (gen !== root._volumeGen)
         return
       if (err)
@@ -1081,11 +1072,8 @@ Item {
     }
     _ignoreFocusLoad = true
     focusFile.setText(JSON.stringify(payload) + "\n")
-    // atomicWrites can replace the inode; chmod after the write lands.
-    Qt.callLater(function() {
-      chmodFocusProc.command = ["chmod", "600", root.focusPath]
-      chmodFocusProc.running = true
-    })
+    chmodFocusProc.command = ["chmod", "600", root.focusPath]
+    chmodFocusProc.running = true
   }
 
   function loadFocus(raw) {
@@ -1193,53 +1181,25 @@ Item {
   }
 
   function _pump() {
-    if (httpProc.running || chmodBodyProc.running || chmodResponseProc.running
-        || responseStatProc.running || _httpAwaitingBody)
-      return
-    if (_pending)
-      return
-    if (!_queue.length)
+    if (httpProc.running || _pending || !_queue.length)
       return
     var job = _queue[0]
-    var rest = _queue.slice(1)
-    _queue = rest
+    _queue = _queue.slice(1)
     _pending = job
     _pendingCallback = job.callback || null
-    var chmodFiles = []
-    if (job.body) {
-      bodyFile.setText(job.body)
-      chmodFiles.push(bodyPath)
-    }
-    if (job.token) {
-      headerFile.setText(DirectorClient.authHeaderText(job.token))
-      chmodFiles.push(headerPath)
-    }
-    if (chmodFiles.length) {
-      root._httpGen += 1
-      job.gen = root._httpGen
-      var gen = root._httpGen
-      Qt.callLater(function() {
-        if (gen !== root._httpGen)
-          return
-        if (!root._pending)
-          return
-        chmodBodyProc.command = ["chmod", "600"].concat(chmodFiles)
-        chmodBodyProc.running = true
-      })
-      return
-    }
     _startHttp(job)
   }
 
   function _startHttp(job) {
-    var args = DirectorClient.curlArgs({
+    root._httpConfig = DirectorClient.curlConfigText({
       url: job.url,
       insecure: job.insecure === true,
-      bodyPath: job.body ? bodyPath : "",
-      headerPath: job.token ? headerPath : "",
-      outputPath: responsePath
+      body: job.body || "",
+      token: job.token || ""
     })
-    httpProc.command = args
+    // stdinEnabled latches false once onStarted has written the config, so it
+    // has to be reopened before every run.
+    httpProc.stdinEnabled = true
     httpProc.running = true
   }
 
@@ -1248,7 +1208,6 @@ Item {
     var cb = _pendingCallback
     _pending = null
     _pendingCallback = null
-    _httpAwaitingBody = false
     if (DirectorClient.isOversizedResponse(body)) {
       var oversized = DirectorClient.networkErrorMessage(63)
       if (cb)
@@ -1451,6 +1410,10 @@ Item {
   FileView {
     id: credentialsFile
     path: root.credentialsPath
+    // blockWrites makes setText synchronous. Without it, atomicWrites renames a
+    // fresh inode over the one chmodProc already targeted, leaving the plaintext
+    // password world-readable.
+    blockWrites: true
     watchChanges: false
     atomicWrites: true
     printErrors: false
@@ -1461,6 +1424,7 @@ Item {
   FileView {
     id: focusFile
     path: root.focusPath
+    blockWrites: true
     watchChanges: false
     atomicWrites: true
     printErrors: false
@@ -1468,92 +1432,33 @@ Item {
     onLoadFailed: root.loadFocus("")
   }
 
-  FileView {
-    id: bodyFile
-    path: root.bodyPath
-    watchChanges: false
-    atomicWrites: true
-    blockWrites: true
-    printErrors: false
-  }
-
-  FileView {
-    id: headerFile
-    path: root.headerPath
-    watchChanges: false
-    atomicWrites: true
-    blockWrites: true
-    printErrors: false
-  }
-
-  FileView {
-    id: navBodyFile
-    path: root._navBodyPath
-    watchChanges: false
-    atomicWrites: true
-    blockWrites: true
-    printErrors: false
-  }
-
-  FileView {
-    id: navHeaderFile
-    path: root._navHeaderPath
-    watchChanges: false
-    atomicWrites: true
-    blockWrites: true
-    printErrors: false
-  }
-
-  FileView {
-    id: responseFile
-    path: root.responsePath
-    watchChanges: false
-    atomicWrites: false
-    printErrors: false
-    onLoaded: {
-      if (!root._httpAwaitingBody)
-        return
-      root._httpAwaitingBody = false
-      root._finishHttp(root._httpExitCode, text(), root._httpStatusText)
-    }
-    onLoadFailed: {
-      if (!root._httpAwaitingBody)
-        return
-      root._httpAwaitingBody = false
-      root._finishHttp(root._httpExitCode, "", root._httpStatusText)
-    }
-  }
-
-  FileView {
-    id: navResponseFile
-    path: root._navResponsePath
-    watchChanges: false
-    atomicWrites: false
-    printErrors: false
-    onLoaded: {
-      if (!root._navAwaitingBody)
-        return
-      root._navAwaitingBody = false
-      root._finishNavBody(root._navExitCode, text())
-    }
-    onLoadFailed: {
-      if (!root._navAwaitingBody)
-        return
-      root._navAwaitingBody = false
-      root._finishNavBody(root._navExitCode, "")
-    }
-  }
-
   Process {
     id: mkdirProc
     command: ["mkdir", "-p", root.stateDir]
     running: false
-    onExited: Qt.callLater(function() {
-      if (credentialsFile)
-        credentialsFile.reload()
-      if (focusFile)
-        focusFile.reload()
-    })
+    onExited: {
+      chmodStateDirProc.running = true
+      Qt.callLater(function() {
+        if (credentialsFile)
+          credentialsFile.reload()
+        if (focusFile)
+          focusFile.reload()
+      })
+    }
+  }
+
+  // Defence in depth for the credentials file: even if a future per-file mode
+  // race reopened, nothing outside this user can traverse into the directory.
+  Process {
+    id: chmodStateDirProc
+    running: false
+    command: ["chmod", "700", root.stateDir]
+  }
+
+  Process {
+    id: rmProc
+    running: false
+    command: ["rm", "-f", root._navCookiePath]
   }
 
   Process {
@@ -1568,88 +1473,17 @@ Item {
     command: ["chmod", "600", root.focusPath]
   }
 
-  Process {
-    id: chmodBodyProc
-    running: false
-    command: ["chmod", "600", root.bodyPath]
-    onExited: {
-      if (root._pending && (!root._pending.gen || root._pending.gen === root._httpGen))
-        root._startHttp(root._pending)
-      else
-        root._pump()
-    }
-  }
-
-  Process {
-    id: chmodResponseProc
-    running: false
-    command: ["chmod", "600", root.responsePath]
-    onExited: {
-      if (!root._httpAwaitingBody)
-        return
-      responseStatProc.command = ["stat", "-c", "%s", root.responsePath]
-      responseStatProc.running = true
-    }
-  }
-
-  Process {
-    id: responseStatProc
-    running: false
-    command: ["true"]
-    stdout: StdioCollector {
-      id: responseStatStdout
-      waitForEnd: true
-    }
-    onExited: {
-      if (!root._httpAwaitingBody)
-        return
-      var n = parseInt(String(responseStatStdout.text || "").trim(), 10)
-      if (DirectorClient.isOversizedBytes(n)) {
-        root._httpAwaitingBody = false
-        root._finishHttp(63, "", "0")
-        return
-      }
-      responseFile.reload()
-    }
-  }
-
-  Process {
-    id: chmodNavResponseProc
-    running: false
-    command: ["chmod", "600", root._navResponsePath]
-    onExited: {
-      if (!root._navAwaitingBody)
-        return
-      navStatProc.command = ["stat", "-c", "%s", root._navResponsePath]
-      navStatProc.running = true
-    }
-  }
-
-  Process {
-    id: navStatProc
-    running: false
-    command: ["true"]
-    stdout: StdioCollector {
-      id: navStatStdout
-      waitForEnd: true
-    }
-    onExited: {
-      if (!root._navAwaitingBody)
-        return
-      var n = parseInt(String(navStatStdout.text || "").trim(), 10)
-      if (DirectorClient.isOversizedBytes(n)) {
-        root._navAwaitingBody = false
-        root._stopNav()
-        return
-      }
-      navResponseFile.reload()
-    }
-  }
-
+  // Both curl processes run the same compile-time-constant wrapper command.
+  // The per-request config — URL, bearer token, JWT, body — goes in over stdin
+  // and never reaches argv or disk. `Process` has no flush(), and `curl -K -`
+  // reads stdin to EOF before starting the transfer, so the write must happen
+  // in onStarted and stdin must always be closed straight after: a missed close
+  // is a hang until --max-time, not an error.
   Process {
     id: httpProc
     running: false
-    command: ["true"]
+    command: DirectorClient.CURL_WRAPPER_COMMAND
+    stdinEnabled: true
     stdout: StdioCollector {
       id: httpStdout
       waitForEnd: true
@@ -1658,68 +1492,45 @@ Item {
       id: httpStderr
       waitForEnd: true
     }
-    onExited: function(exitCode) {
+    onStarted: {
+      httpProc.write(root._httpConfig)
+      httpProc.stdinEnabled = false
+    }
+    onExited: {
       if (root._ignoreHttpExit) {
         root._ignoreHttpExit = false
         return
       }
-      if (exitCode === 63) {
+      // The shell's own exit status is head's, not curl's — curl's code and the
+      // HTTP status both arrive as markers on stderr.
+      var markers = DirectorClient.parseStderrMarkers(httpStderr.text)
+      if (markers.exitCode === 63) {
         root._finishHttp(63, "", "0")
         return
       }
-      root._httpAwaitingBody = true
-      root._httpExitCode = exitCode
-      root._httpStatusText = httpStdout.text || ""
-      chmodResponseProc.command = ["chmod", "600", root.responsePath]
-      chmodResponseProc.running = true
-    }
-  }
-
-  Process {
-    id: navTouch
-    running: false
-    command: ["true"]
-    onExited: {
-      if (root._navPhase === "handshake")
-        root._navGet("/socket.io/?EIO=4&transport=polling", 12)
-    }
-  }
-
-  Timer {
-    id: navPostDelay
-    interval: 50
-    repeat: false
-    onTriggered: {
-      var files = [root._navHeaderPath]
-      if (root._navQueuedKind === "post")
-        files.push(root._navBodyPath)
-      navChmodProc.command = ["chmod", "600"].concat(files)
-      navChmodProc.running = true
-    }
-  }
-
-  Process {
-    id: navChmodProc
-    running: false
-    command: ["chmod", "600", root._navBodyPath]
-    onExited: {
-      if (root._navQueuedKind === "get")
-        root._startNavGet()
-      else if (root._navQueuedKind === "post")
-        root._startNavPost()
+      root._finishHttp(markers.exitCode, httpStdout.text, String(markers.status))
     }
   }
 
   Process {
     id: navProc
     running: false
-    command: ["true"]
+    command: DirectorClient.CURL_WRAPPER_COMMAND
+    stdinEnabled: true
     stdout: StdioCollector {
       id: navStdout
       waitForEnd: true
     }
-    onExited: function(exitCode) {
-      root._onNavExit(exitCode)
+    stderr: StdioCollector {
+      id: navStderr
+      waitForEnd: true
+    }
+    onStarted: {
+      navProc.write(root._navConfig)
+      navProc.stdinEnabled = false
+    }
+    onExited: {
+      root._onNavExit(DirectorClient.parseStderrMarkers(navStderr.text).exitCode)
     }
   }
 

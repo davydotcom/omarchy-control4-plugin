@@ -54,3 +54,6 @@
 {"ts":"2026-08-23T21:06:12.964023913Z","type":"spec.status_changed","agent":"human/david-estes","slug":"room-now-playing","message":"status -\u003e completed"}
 {"ts":"2026-08-23T21:06:13.390876037Z","type":"delivery_complete","agent":"human/david-estes","slug":"control4-focused-room-remote","message":"Control4 focused-room remote"}
 {"ts":"2026-08-23T21:06:13.390953868Z","type":"spec.status_changed","agent":"human/david-estes","slug":"control4-focused-room-remote","message":"status -\u003e completed"}
+{"ts":"2026-08-24T12:01:11.233078655Z","type":"files_modified","agent":"mcp/hero","message":"Pushed 3300128 Keep Control4 tokens off curl argv and bound HTTP bodies; resubmitting marketplace issue 1941"}
+{"ts":"2026-08-26T00:35:50.048329821Z","type":"delivery_complete","agent":"human/david-estes","slug":"stream-curl-transport","message":"\"Stream curl transport — no request or response data on disk\""}
+{"ts":"2026-08-26T00:35:50.048412683Z","type":"spec.status_changed","agent":"human/david-estes","slug":"stream-curl-transport","message":"status -\u003e completed"}

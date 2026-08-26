@@ -22,21 +22,29 @@ LAN only. This plugin talks to `apis.control4.com` to mint a director JWT,
 then to `https://<controller-ip>/api/v1/...` on your network. It does not
 use 4Sight.
 
-Credentials are stored at
-`$HOME/.local/state/omarchy/io.github.davydotcom.control4/credentials.json`
-(mode 600). The focused room id is stored separately at
-`$HOME/.local/state/omarchy/io.github.davydotcom.control4/focus.json`
-(`{"roomId": 9}` only — no password, no JWT, no room name). Neither file is
-written to `~/.config/omarchy/shell.json`.
+State lives under
+`$HOME/.local/state/omarchy/io.github.davydotcom.control4/` (mode 700). Only
+these files are persisted:
+
+- `credentials.json` (mode 600) — controller IP, email, and password
+- `focus.json` (mode 600) — `{"roomId": 9}` only; no password, JWT, or room name
+- `nav-cookies.txt` (mode 600) — short-lived navigator session cookie while
+  connected; removed when you Disconnect from the panel gear menu
+
+HTTP request and response bodies are not written to disk; they stream through
+curl over stdin/stdout. Nothing from this state directory is written to
+`~/.config/omarchy/shell.json`.
 
 ## Compatibility
 
-Used live against **Control4 OS 4** on the LAN (cloud-issued director JWT,
-then local `/api/v1/*`). OS 3.x uses the same path and is expected to work.
+Confirmed live on **Control4 OS 4.2.1.757028-res** (Core 3): cloud-issued
+director JWT, then local `/api/v1/*`. OS 3.x and earlier OS 4 use the same
+path and are expected to work.
 
-Some **OS 4.2** controllers reject that JWT on local `/api/v1/*` (HTTP 401).
-If cloud sign-in succeeds but the panel shows that the Director rejected the
-session, that is this case. There is no workaround in this plugin.
+A few **OS 4.2.0** controllers have been reported to reject that JWT on
+local `/api/v1/*` (HTTP 401). If cloud sign-in succeeds but the panel shows
+that the Director rejected the session, that is this case. There is no
+workaround in this plugin.
 
 ## Install (published)
 
@@ -109,9 +117,10 @@ omarchy plugin validate "$HOME/.config/omarchy/plugins/io.github.davydotcom.cont
 omarchy plugin remove io.github.davydotcom.control4
 ```
 
-Removing the plugin does not delete
-`$HOME/.local/state/omarchy/io.github.davydotcom.control4/credentials.json` or
-`focus.json`.
+Removing the plugin does not delete the state directory. `credentials.json`,
+`focus.json`, and any leftover `nav-cookies.txt` remain until you delete that
+folder yourself. Disconnect (gear menu) clears `nav-cookies.txt` but keeps
+credentials and focus.
 
 ## Open to contribution
 

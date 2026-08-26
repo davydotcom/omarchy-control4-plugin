@@ -14,10 +14,27 @@ var STATUS_CONNECTED = "Connected"
 var STATUS_SIGN_IN_FAILED = "Sign-in failed"
 var STATUS_DIRECTOR_401 = "Director rejected the session (HTTP 401). This is expected on Control4 OS 4.2."
 
-// Cap for curl --max-filesize and for refusing to load a response file
-// into QML. Bodies go to -o (not StdioCollector) so the long-lived shell
-// never retains an unbounded LAN/cloud/nav payload in process memory.
+// Cap for curl --max-filesize, for the wrapper's `head -c` pipe cap, and for
+// refusing an oversized body in QML. Responses stream back over a bounded pipe
+// so the long-lived shell never retains an unbounded LAN/cloud/nav payload.
 var MAX_RESPONSE_BYTES = 8388608
+
+// The one and only command every curl invocation runs. It is a compile-time
+// constant: no URL, token, password, or any other caller-controlled value is
+// ever interpolated into it. Every per-request value arrives on stdin as a
+// `curl -K -` config. Using a shell is acceptable *only* because of that — if a
+// future change needs to interpolate something here, the design has been
+// broken; put it in the config text instead.
+//
+//   umask 077  -> anything curl creates (the navigator cookie jar written by
+//                 `cookie-jar`) is mode 0600 at creation, not chmod'd after.
+//   { ... }    -> a bare pipeline's exit status is head's, so curl's own exit
+//                 code is captured as an `RC:` marker on stderr instead.
+//                 POSIX-portable; does not depend on `pipefail`.
+//   head -c    -> MAX_RESPONSE_BYTES + 1, so the existing isOversizedResponse
+//                 (length > MAX) fires on exactly the same inputs as before.
+//                 Closing the pipe also SIGPIPEs curl on an oversized transfer.
+var CURL_WRAPPER_COMMAND = ["sh", "-c", "umask 077; { curl -sS -K -; echo \"RC:$?\" >&2; } | head -c 8388609"]
 
 function accountAuthBody(email, password) {
   return JSON.stringify({
@@ -175,11 +192,6 @@ function isOversizedResponse(text) {
   return String(text || "").length > MAX_RESPONSE_BYTES
 }
 
-function isOversizedBytes(n) {
-  var v = Number(n)
-  return isFinite(v) && v > MAX_RESPONSE_BYTES
-}
-
 function isTransientCurl(exitCode) {
   var code = Number(exitCode)
   return code === 7 || code === 23 || code === 26 || code === 28
@@ -203,40 +215,91 @@ function statusTextFor(sessionState, authFailedKind, lastError, hasCredentials, 
   return STATUS_NOT_CONFIGURED
 }
 
-function curlArgs(opts) {
-  var args = ["curl", "-sS", "--max-time", "20", "--max-filesize", String(MAX_RESPONSE_BYTES)]
-  if (opts && opts.insecure)
-    args.push("-k")
-  args.push("-o", String(opts && opts.outputPath || ""))
-  args.push("-w", "%{http_code}")
-  if (opts && opts.headerPath)
-    args.push("-H", "@" + String(opts.headerPath))
-  if (opts && opts.bodyPath) {
-    args.push("-H", "Content-Type: application/json")
-    args.push("--data-binary", "@" + opts.bodyPath)
+// Inside a curl config file a quoted value un-escapes \\ \" \t \n \r \v.
+// Backslash MUST be escaped before quote, and the reason is not self-evident: a
+// JSON body already contains \" for an embedded quote, so escaping quotes first
+// would turn \" into \\" and corrupt the body. Backslash-first turns it into
+// \\\" which curl un-escapes back to \" — correct. Reversing these two calls is
+// silent corruption, not a parse error.
+function curlConfigEscape(s) {
+  return String(s == null ? "" : s).replace(/\\/g, "\\\\").replace(/"/g, "\\\"")
+}
+
+// In a config file `data-binary` treats a leading "@" as a filename. No current
+// caller can produce one (every body is JSON.stringify output starting with
+// "{"), but the builder must never silently turn a future body into a file read.
+function _rejectAtBody(fn, body) {
+  if (body.charAt(0) === "@")
+    throw new Error(fn + ": request body may not begin with \"@\"")
+}
+
+function curlConfigText(opts) {
+  var o = opts || {}
+  var body = o.body == null ? "" : String(o.body)
+  _rejectAtBody("curlConfigText", body)
+  var lines = ["silent", "show-error", "max-time = \"20\"",
+    "max-filesize = \"" + MAX_RESPONSE_BYTES + "\""]
+  if (o.insecure)
+    lines.push("insecure")
+  lines.push("write-out = \"%{stderr}HTTP:%{http_code}\\n\"")
+  if (o.token)
+    lines.push("header = \"Authorization: Bearer " + curlConfigEscape(o.token) + "\"")
+  if (body) {
+    lines.push("header = \"Content-Type: application/json\"")
+    lines.push("data-binary = \"" + curlConfigEscape(body) + "\"")
   }
-  args.push(String(opts && opts.url || ""))
-  return args
+  lines.push("url = \"" + curlConfigEscape(o.url) + "\"")
+  return lines.join("\n") + "\n"
 }
 
-function authHeaderText(token) {
-  if (!token)
-    return ""
-  return "Authorization: Bearer " + String(token) + "\n"
+// The navigator flow never reads an HTTP status — only the body and curl's exit
+// code — so this config carries no write-out.
+function curlNavConfigText(opts) {
+  var o = opts || {}
+  var body = o.body == null ? "" : String(o.body)
+  _rejectAtBody("curlNavConfigText", body)
+  var maxTime = o.maxTime != null ? String(o.maxTime) : "35"
+  var lines = ["silent", "show-error",
+    "max-time = \"" + curlConfigEscape(maxTime) + "\"",
+    "max-filesize = \"" + MAX_RESPONSE_BYTES + "\""]
+  if (o.insecure)
+    lines.push("insecure")
+  if (o.cookiePath) {
+    lines.push("cookie = \"" + curlConfigEscape(o.cookiePath) + "\"")
+    lines.push("cookie-jar = \"" + curlConfigEscape(o.cookiePath) + "\"")
+  }
+  if (o.token) {
+    lines.push("header = \"Authorization: Bearer " + curlConfigEscape(o.token) + "\"")
+    lines.push("header = \"JWT: " + curlConfigEscape(o.token) + "\"")
+  }
+  if (body) {
+    lines.push("header = \"Content-Type: " + curlConfigEscape(o.contentType || "text/plain") + "\"")
+    lines.push("data-binary = \"" + curlConfigEscape(body) + "\"")
+  }
+  lines.push("url = \"" + curlConfigEscape(o.url) + "\"")
+  return lines.join("\n") + "\n"
 }
 
-function navHeaderText(token) {
-  if (!token)
-    return ""
-  return authHeaderText(token) + "JWT: " + String(token) + "\n"
+function _lastMarker(text, re) {
+  var last = null
+  var m
+  while ((m = re.exec(text)) !== null)
+    last = m[1]
+  return last
 }
 
-function withHeaderFile(args, headerPath) {
-  if (!headerPath)
-    return args.slice()
-  var out = args.slice()
-  out.splice(out.length - 1, 0, "-H", "@" + String(headerPath))
-  return out
+// curl -sS still writes human-readable failures ("curl: (6) Could not resolve
+// host: ...") to the same stream the markers land on, and a redirect chain can
+// emit more than one HTTP: marker, so take the LAST match of each rather than
+// parsing by position.
+function parseStderrMarkers(stderrText) {
+  var text = String(stderrText || "")
+  var status = parseInt(_lastMarker(text, /HTTP:(\d+)/g), 10)
+  var exitCode = parseInt(_lastMarker(text, /RC:(-?\d+)/g), 10)
+  return {
+    status: isFinite(status) ? status : 0,
+    exitCode: isFinite(exitCode) ? exitCode : 0
+  }
 }
 
 function directorUrl(host, path) {
@@ -482,26 +545,6 @@ function nowPlayingLabel(parsed, items, watchSources, listenSources) {
   if (parsed.videoDeviceId != null)
     return _nameFromItems(items, parsed.videoDeviceId)
   return ""
-}
-
-function curlNavArgs(opts) {
-  var maxTime = opts && opts.maxTime != null ? String(opts.maxTime) : "35"
-  var args = ["curl", "-sS", "--max-time", maxTime, "--max-filesize", String(MAX_RESPONSE_BYTES)]
-  if (opts && opts.insecure)
-    args.push("-k")
-  if (opts && opts.cookiePath) {
-    args.push("-b", String(opts.cookiePath))
-    args.push("-c", String(opts.cookiePath))
-  }
-  if (opts && opts.headerPath)
-    args.push("-H", "@" + String(opts.headerPath))
-  if (opts && opts.bodyPath) {
-    args.push("-H", "Content-Type: " + String(opts.contentType || "text/plain"))
-    args.push("--data-binary", "@" + opts.bodyPath)
-  }
-  args.push("-o", String(opts && opts.outputPath || ""))
-  args.push(String(opts && opts.url || ""))
-  return args
 }
 
 function parseEngineIoSid(raw) {

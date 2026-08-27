@@ -48,20 +48,30 @@ var STATE_FILE_READ_PY = [
   " os.close(fd)"
 ].join("\n")
 
+// Writes never open the predictable destination for truncation. Payload goes to a
+// private mkstemp inode in the state dir, mode 0600 on the fd, then os.replace.
 var STATE_FILE_WRITE_PY = [
-  "import os,sys",
+  "import os,stat,sys,tempfile",
   "path=sys.argv[1]; maxb=int(sys.argv[2])",
   "data=sys.stdin.buffer.read(maxb+1)",
   "if len(data)>maxb: sys.exit(2)",
+  "dir=os.path.dirname(path) or \".\"",
+  "fd=-1; tmp=None",
   "try:",
-  " fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW, 0o600)",
+  " fd,tmp=tempfile.mkstemp(prefix=\".state-write.\", dir=dir)",
+  " st=os.fstat(fd)",
+  " if not stat.S_ISREG(st.st_mode): sys.exit(1)",
+  " os.fchmod(fd, 0o600)",
+  " os.write(fd, data)",
+  " os.close(fd); fd=-1",
+  " os.replace(tmp, path); tmp=None",
   "except OSError:",
   " sys.exit(1)",
-  "try:",
-  " os.write(fd, data)",
-  " os.fchmod(fd, 0o600)",
   "finally:",
-  " os.close(fd)"
+  " if fd>=0: os.close(fd)",
+  " if tmp is not None:",
+  "  try: os.unlink(tmp)",
+  "  except OSError: pass"
 ].join("\n")
 
 function stateFileReadCommand(path, maxBytes) {

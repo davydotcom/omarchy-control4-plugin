@@ -3,6 +3,7 @@
 
 const fs = require("fs")
 const path = require("path")
+const { spawnSync } = require("child_process")
 const vm = require("vm")
 const src = fs.readFileSync(path.join(__dirname, "..", "DirectorClient.js"), "utf8")
   .replace(/^\.pragma library\s*/, "")
@@ -707,8 +708,27 @@ const readCmd = stateFileReadCommand("/tmp/creds.json", 1024)
 assert(readCmd[0] === "/usr/bin/python3" && readCmd[2].includes("O_NOFOLLOW")
   && readCmd[3] === "/tmp/creds.json" && readCmd[4] === "1024", "stateFileReadCommand")
 const writeCmd = stateFileWriteCommand("/tmp/focus.json", 4096)
-assert(writeCmd[0] === "/usr/bin/python3" && writeCmd[2].includes("O_NOFOLLOW")
+assert(writeCmd[0] === "/usr/bin/python3" && writeCmd[2].includes("mkstemp")
+  && writeCmd[2].includes("os.replace") && !writeCmd[2].includes("O_TRUNC")
   && writeCmd[3] === "/tmp/focus.json" && writeCmd[4] === "4096", "stateFileWriteCommand")
+
+const stateDir = fs.mkdtempSync(path.join(require("os").tmpdir(), "c4-state-"))
+const statePath = path.join(stateDir, "focus.json")
+const payload = "{\"roomId\": 9}\n"
+const writeCmdRt = stateFileWriteCommand(statePath, MAX_FOCUS_FILE_BYTES)
+const writeRun = spawnSync(writeCmdRt[0], writeCmdRt.slice(1), {
+  input: payload,
+  encoding: "utf8"
+})
+assert(writeRun.status === 0, "state file write round-trip writes")
+const readCmdRt = stateFileReadCommand(statePath, MAX_FOCUS_FILE_BYTES)
+const readRun = spawnSync(readCmdRt[0], readCmdRt.slice(1), {
+  encoding: "utf8"
+})
+assert(readRun.status === 0 && readRun.stdout === payload, "state file write round-trip reads")
+const st = fs.statSync(statePath)
+assert((st.mode & 0o777) === 0o600, "state file write mode 0600")
+fs.rmSync(stateDir, { recursive: true, force: true })
 
 const panelQml = fs.readFileSync(path.join(__dirname, "..", "Panel.qml"), "utf8")
 assert(!/[\u25B6\u23F8\u23ED\u23EE\u23EA\u23E9]/.test(panelQml),

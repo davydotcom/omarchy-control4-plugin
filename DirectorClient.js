@@ -25,15 +25,15 @@ var MAX_CREDENTIALS_FILE_BYTES = 65536
 var MAX_FOCUS_FILE_BYTES = 4096
 
 // Graphical Omarchy sessions may not export mise shims to PATH; use an absolute
-// interpreter path for descriptor-level state-file I/O (O_NOFOLLOW, regular
-// file check, bounded read/write, mode 0600 at creation).
+// interpreter path for descriptor-level state-file I/O (O_NOFOLLOW | O_NONBLOCK,
+// regular-file check, bounded read/write, mode 0600 at creation).
 var STATE_FILE_PYTHON = "/usr/bin/python3"
 
 var STATE_FILE_READ_PY = [
   "import os,stat,sys",
   "path=sys.argv[1]; maxb=int(sys.argv[2])",
   "try:",
-  " fd=os.open(path, os.O_RDONLY|os.O_NOFOLLOW)",
+  " fd=os.open(path, os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)",
   "except OSError:",
   " sys.exit(1)",
   "try:",

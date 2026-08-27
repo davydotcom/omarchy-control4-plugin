@@ -706,6 +706,7 @@ assert(MAX_FOCUS_FILE_BYTES === 4096, "focus byte cap")
 assert(STATE_FILE_PYTHON === "/usr/bin/python3", "absolute python path")
 const readCmd = stateFileReadCommand("/tmp/creds.json", 1024)
 assert(readCmd[0] === "/usr/bin/python3" && readCmd[2].includes("O_NOFOLLOW")
+  && readCmd[2].includes("O_NONBLOCK")
   && readCmd[3] === "/tmp/creds.json" && readCmd[4] === "1024", "stateFileReadCommand")
 const writeCmd = stateFileWriteCommand("/tmp/focus.json", 4096)
 assert(writeCmd[0] === "/usr/bin/python3" && writeCmd[2].includes("mkstemp")
@@ -729,6 +730,14 @@ assert(readRun.status === 0 && readRun.stdout === payload, "state file write rou
 const st = fs.statSync(statePath)
 assert((st.mode & 0o777) === 0o600, "state file write mode 0600")
 fs.rmSync(stateDir, { recursive: true, force: true })
+
+const fifoDir = fs.mkdtempSync(path.join(require("os").tmpdir(), "c4-fifo-"))
+const fifoPath = path.join(fifoDir, "focus.json")
+assert(spawnSync("mkfifo", ["-m", "600", fifoPath]).status === 0, "mkfifo for FIFO read test")
+const fifoReadCmd = stateFileReadCommand(fifoPath, MAX_FOCUS_FILE_BYTES)
+const fifoRead = spawnSync(fifoReadCmd[0], fifoReadCmd.slice(1), { encoding: "utf8" })
+assert(fifoRead.status === 1, "state file read rejects FIFO without blocking")
+fs.rmSync(fifoDir, { recursive: true, force: true })
 
 const panelQml = fs.readFileSync(path.join(__dirname, "..", "Panel.qml"), "utf8")
 assert(!/[\u25B6\u23F8\u23ED\u23EE\u23EA\u23E9]/.test(panelQml),

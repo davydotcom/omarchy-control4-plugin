@@ -27,9 +27,9 @@ State lives under
 these files are persisted:
 
 - `credentials.json` (mode 600) — controller IP, email, and password; reads use
-  bounded descriptor-level I/O (`O_NOFOLLOW`, regular-file check, byte cap);
-  writes atomically replace via a private temp file so a preplaced FIFO, symlink,
-  or hard link on the destination cannot block or hijack the write
+  bounded descriptor-level I/O (`O_NOFOLLOW | O_NONBLOCK`, regular-file check,
+  byte cap); writes atomically replace via a private temp file so a preplaced
+  FIFO, symlink, or hard link on the destination cannot block or hijack the write
 - `focus.json` (mode 600) — `{"roomId": 9}` only; no password, JWT, or room name;
   same bounded read and atomic-write path as credentials
 - `nav-cookies.txt` (mode 600) — short-lived navigator session cookie while

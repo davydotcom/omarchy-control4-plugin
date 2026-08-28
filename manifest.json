@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.davydotcom.control4",
   "name": "Control4",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": "David Estes",
   "license": "MIT",
   "description": "Watch Apple TV, listen to Apple Music, or tune in local radio from a Control4 room on the Omarchy bar.",

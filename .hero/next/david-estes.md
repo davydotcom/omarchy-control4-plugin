@@ -1,6 +1,6 @@
 ---
 user: david-estes
-updated: 2026-08-27T16:50:20Z
+updated: 2026-08-28T20:39:31Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
@@ -10,13 +10,13 @@ repo: davydotcom/omarchy-control4-plugin
 
 > Listen Apple Music should list personal stations via MSP navigator, not fake folders
 
-_possibly stale — 13 commit(s) since, last set 4d 2h ago_
+_possibly stale — 14 commit(s) since, last set 5d 6h ago_
 
 ## Last user ask
 
 > can you check the latest comment on gh issue https://github.com/HANCORE-linux/omarchy-plugin-marketplace/issues/1941 for this project and determine if its valid.
 
-_possibly stale — 2 commit(s) since, last set 1d 6h ago_
+_possibly stale — 3 commit(s) since, last set 2d 10h ago_
 
 ## Suggested next prompt
 

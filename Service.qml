@@ -76,6 +76,7 @@ Item {
   property int _navPostMaxTime: 12
   property bool _browsePending: false
   property int _browseTries: 0
+  property int _navConnectTries: 0
   property var _uiConfig: null
   property var _items: null
   property int volume: 0
@@ -410,8 +411,13 @@ Item {
     _browseStack = []
     _browseCtx = null
     _browsePending = true
+    _navConnectTries = 0
     if (_navPhase !== "live" || !_navClientId) {
       browseHint = "Connecting…"
+      // Cover the connect window: handshake / datatoui failures used to leave
+      // browse stuck on "Connecting…" forever because browseWaitTimer only
+      // armed after GetTabList.
+      browseWaitTimer.restart()
       if (!_navPhase)
         _startNav()
       return
@@ -544,6 +550,7 @@ Item {
     _navWaitCb = null
     _browsePending = false
     _browseTries = 0
+    _navConnectTries = 0
     _mspSvc = ""
     _stopNav()
   }
@@ -741,6 +748,25 @@ Item {
       cb(resp)
   }
 
+  function _retryNavConnect(failHint) {
+    if (!browseOpen || !browseBusy)
+      return
+    if (_navConnectTries < 2) {
+      _navConnectTries += 1
+      browseHint = "Retrying…"
+      browseWaitTimer.restart()
+      // Force a full restart even when stuck mid-handshake/client/subscribe.
+      // Only checking !_navPhase skipped retries while a dead phase was still set.
+      Qt.callLater(function() {
+        if (root.browseOpen && root.browseBusy && root._navPhase !== "live")
+          root._startNav()
+      })
+      return
+    }
+    browseBusy = false
+    browseHint = failHint || "Could not open browser"
+  }
+
   function _startNav() {
     if (!_directorToken || !DirectorClient.normalizeHost(controllerIp))
       return
@@ -858,6 +884,8 @@ Item {
       _navSid = DirectorClient.parseEngineIoSid(text)
       if (!_navSid) {
         _navPhase = ""
+        if (browseOpen && browseBusy)
+          _retryNavConnect("Could not open browser")
         return
       }
       _navPhase = "ns"
@@ -874,9 +902,11 @@ Item {
       _navClientId = cid
       _navPhase = "subscribe"
       directorGet("/api/v1/items/datatoui?SubscriptionClient=" + encodeURIComponent(cid), function(err, body) {
+        // MSP DATA_RECEIVED only arrives after this subscription. Going "live"
+        // without it leaves GetTabList hanging until the browse timeout.
         if (err || !body) {
-          root._navPhase = "live"
-          root._navPoll()
+          root._navPhase = ""
+          root._retryNavConnect("Could not open browser")
           return
         }
         try {
@@ -888,10 +918,8 @@ Item {
         if (root._navSubId)
           root._navPostRaw("42[\"startSubscription\",\"" + root._navSubId + "\"]", 12)
         else {
-          root._navPhase = "live"
-          root._navPoll()
-          if (root.browseOpen && root.browseBusy && root._mspDeviceId)
-            root.openMspBrowse(root._mspDeviceId, root._mspSvc)
+          root._navPhase = ""
+          root._retryNavConnect("Could not open browser")
         }
       })
       return
@@ -1551,6 +1579,12 @@ Item {
     onTriggered: {
       root._navWaitSeq = 0
       root._navWaitCb = null
+      // Still waiting on the navigator session itself.
+      if (root.browseOpen && root.browseBusy && (!root.browseRows || !root.browseRows.length)
+          && root._navPhase !== "live") {
+        root._retryNavConnect((root.browseTitle || "This source") + " did not respond")
+        return
+      }
       if (root.browseOpen && (!root.browseRows || !root.browseRows.length) && root._browseTries < 1 && root._navPhase === "live") {
         root._browseTries += 1
         root.browseHint = "Retrying…"
@@ -1610,6 +1644,80 @@ Item {
     repeat: true
     running: false
     onTriggered: root.refreshVolume()
+  }
+
+  // Dev / recovery harness: qs -p /usr/share/omarchy/shell ipc call io.github.davydotcom.control4 status
+  IpcHandler {
+    target: "io.github.davydotcom.control4"
+
+    function status(): string {
+      var rows = root.browseRows
+      var titles = []
+      if (rows && rows.length) {
+        for (var i = 0; i < Math.min(rows.length, 8); i++)
+          titles.push(String(rows[i] && rows[i].title || ""))
+      }
+      return JSON.stringify({
+        sessionState: root.sessionState,
+        statusText: root.statusText,
+        focusedRoomId: root.focusedRoomId,
+        focusedRoomName: root.focusedRoomName,
+        sourceMode: root.sourceMode,
+        browseOpen: root.browseOpen,
+        browseBusy: root.browseBusy,
+        browseHint: root.browseHint,
+        browseTitle: root.browseTitle,
+        browseRowCount: rows ? rows.length : 0,
+        browseTitles: titles,
+        navPhase: root._navPhase,
+        hasNavClient: !!root._navClientId,
+        hasToken: !!root._directorToken,
+        mspDeviceId: root._mspDeviceId,
+        mspSvc: root._mspSvc,
+        navConnectTries: root._navConnectTries,
+        browseTries: root._browseTries
+      })
+    }
+
+    function browseApple(): string {
+      if (root.sessionState !== "connected")
+        return "not-connected:" + root.sessionState
+      if (root.focusedRoomId === null || root.focusedRoomId === undefined)
+        return "no-room"
+      if (root.sourceMode !== "listen")
+        root.setSourceMode("listen")
+      var list = root.sources
+      if (!list || !list.length)
+        root._rebuildSources(false)
+      list = root.sources
+      var appleId = null
+      if (list) {
+        for (var i = 0; i < list.length; i++) {
+          if (list[i] && DirectorClient.isAppleMusicItem(root._itemById(list[i].id))) {
+            appleId = list[i].id
+            break
+          }
+          if (list[i] && String(list[i].name || "") === "Apple Music") {
+            appleId = list[i].id
+            break
+          }
+        }
+      }
+      if (appleId === null)
+        return "no-apple-source"
+      root.selectSource(appleId)
+      return "started:" + String(appleId)
+    }
+
+    function browseTap(index: string): string {
+      var n = Number(index)
+      if (!isFinite(n))
+        return "bad-index"
+      if (!root.browseOpen)
+        return "browse-closed"
+      root.browseTap(n)
+      return "tapped:" + String(n)
+    }
   }
 
   Component.onCompleted: stateDirProc.running = true

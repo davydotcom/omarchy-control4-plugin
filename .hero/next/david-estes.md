@@ -1,6 +1,6 @@
 ---
 user: david-estes
-updated: 2026-08-28T20:39:31Z
+updated: 2026-08-31T17:21:36Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
@@ -10,21 +10,15 @@ repo: davydotcom/omarchy-control4-plugin
 
 > Listen Apple Music should list personal stations via MSP navigator, not fake folders
 
-_possibly stale — 14 commit(s) since, last set 5d 6h ago_
+_possibly stale — 15 commit(s) since, last set 8d 3h ago_
 
 ## Last user ask
 
-> can you check the latest comment on gh issue https://github.com/HANCORE-linux/omarchy-plugin-marketplace/issues/1941 for this project and determine if its valid.
-
-_possibly stale — 3 commit(s) since, last set 2d 10h ago_
+> deliver apple-music-could-not-open-browser
 
 ## Suggested next prompt
 
-> let's tackle Add room to source
-
-_Rationale: highest-priority open feature: Add room to source (`add-room-to-source`)_
-
-_Source: auto-derived from open feature — `hero next suggest "..."` to override._
+> Commit the Service.qml Apple Music nav hard-reset (apple-music-could-not-open-browser) when ready.
 
 ## Recent reflections
 

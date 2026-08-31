@@ -1,12 +1,12 @@
 # Project Snapshot — omarchy-control4-plugin
 
-_Last refreshed: 2026-08-26T00:36:01Z · projected from 48 source nodes_
+_Last refreshed: 2026-08-31T17:21:36Z · projected from 49 source nodes_
 
 ## Surfaces
 
 | Surface | Stage | Path(s) | Last touched | Driver spec |
 |---|---|---|---|---|
-| (unassigned) | — | — | — | 33 specs without surface |
+| (unassigned) | — | — | — | 34 specs without surface |
 
 _Run `hero snapshot assign` to bucket unassigned specs._
 
@@ -24,7 +24,7 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 
 ## Recently completed (last 14 days)
 
-- **(unassigned)** — stream-curl-transport, control4-focused-room-remote, room-now-playing, halo-panel-chrome, room-volume-mute-off, listen-library-browse, volume-slider-reads-room-name, watch-and-listen, virtual-remote-numbers, watch-source-virtual-remote, drop-halo-row-accent-tick, remote-pad-clipped-above-volume
+- **(unassigned)** — apple-music-could-not-open-browser, stream-curl-transport, control4-focused-room-remote, room-now-playing, halo-panel-chrome, room-volume-mute-off, listen-library-browse, volume-slider-reads-room-name, watch-and-listen, virtual-remote-numbers, watch-source-virtual-remote, drop-halo-row-accent-tick
 
 ## Next up across surfaces
 
@@ -37,11 +37,11 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 ## Open risks & blockers
 
 - **Blocked specs (6):** `add-room-to-source` (waits on room-session-model); `multi-room-volume-view` (waits on room-session-model); `room-blinds` (waits on experience-switch); `room-climate` (waits on experience-switch); `room-lighting` (waits on experience-switch); `room-scenes` (waits on experience-switch).
-- **Unassigned specs (33) — no `surface:` declared.** Run `hero snapshot assign` to bucket them.
+- **Unassigned specs (34) — no `surface:` declared.** Run `hero snapshot assign` to bucket them.
 
 ## Snapshot health
 
 - Surfaces detected: 0 (inferred: 0 · overrides applied: 0)
-- Specs covered: 0/33 (0%)
-- Projection generation: 0ms · Source nodes: 48
+- Specs covered: 0/34 (0%)
+- Projection generation: 0ms · Source nodes: 49
 

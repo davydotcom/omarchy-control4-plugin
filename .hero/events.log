@@ -57,3 +57,8 @@
 {"ts":"2026-08-24T12:01:11.233078655Z","type":"files_modified","agent":"mcp/hero","message":"Pushed 3300128 Keep Control4 tokens off curl argv and bound HTTP bodies; resubmitting marketplace issue 1941"}
 {"ts":"2026-08-26T00:35:50.048329821Z","type":"delivery_complete","agent":"human/david-estes","slug":"stream-curl-transport","message":"\"Stream curl transport — no request or response data on disk\""}
 {"ts":"2026-08-26T00:35:50.048412683Z","type":"spec.status_changed","agent":"human/david-estes","slug":"stream-curl-transport","message":"status -\u003e completed"}
+{"ts":"2026-08-31T17:04:45.171101601Z","type":"spec_created","agent":"mcp/hero","slug":"apple-music-could-not-open-browser","message":"Diagnosed apple-music-could-not-open-browser: Listen MSP nav stuck in long-lived shell; restart recovers"}
+{"event":"claimed","slug":"apple-music-could-not-open-browser","agent":"david-estes","at":"2026-08-31T13:16:40.770282461-04:00"}
+{"ts":"2026-08-31T17:20:29.599911169Z","type":"delivery_complete","agent":"human/david-estes","slug":"apple-music-could-not-open-browser","message":"Apple Music Listen shows Could not open browser"}
+{"ts":"2026-08-31T17:20:29.600002393Z","type":"spec.status_changed","agent":"human/david-estes","slug":"apple-music-could-not-open-browser","message":"status -\u003e completed"}
+{"ts":"2026-08-31T17:20:43.102777718Z","type":"delivery_complete","agent":"mcp/hero","slug":"apple-music-could-not-open-browser","message":"Completed apple-music-could-not-open-browser: MSP nav hard-reset on browse open; verify PASS"}

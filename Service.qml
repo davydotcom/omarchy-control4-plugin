@@ -77,6 +77,7 @@ Item {
   property bool _browsePending: false
   property int _browseTries: 0
   property int _navConnectTries: 0
+  property string _navDebug: ""
   property var _uiConfig: null
   property var _items: null
   property int volume: 0
@@ -412,14 +413,23 @@ Item {
     _browseCtx = null
     _browsePending = true
     _navConnectTries = 0
+    _navDebug = ""
     if (_navPhase !== "live" || !_navClientId) {
       browseHint = "Connecting…"
       // Cover the connect window: handshake / datatoui failures used to leave
       // browse stuck on "Connecting…" forever because browseWaitTimer only
       // armed after GetTabList.
       browseWaitTimer.restart()
-      if (!_navPhase)
-        _startNav()
+      // Hard-reset every connect attempt. Mid-phase zombies used to skip
+      // `_startNav` when `_navPhase` was set but not live; a sticky jar/process
+      // then exhausted retries until the shell restarted.
+      _stopNav()
+      rmProc.running = true
+      Qt.callLater(function() {
+        if (root.browseOpen && root.browseBusy
+            && (root._navPhase !== "live" || !root._navClientId))
+          root._startNav()
+      })
       return
     }
     _browsePending = false
@@ -765,6 +775,7 @@ Item {
     }
     browseBusy = false
     browseHint = failHint || "Could not open browser"
+    try { browseWaitTimer.stop() } catch (e) {}
   }
 
   function _startNav() {
@@ -883,6 +894,7 @@ Item {
     if (_navPhase === "handshake") {
       _navSid = DirectorClient.parseEngineIoSid(text)
       if (!_navSid) {
+        _navDebug = "handshake no sid len=" + String(text.length)
         _navPhase = ""
         if (browseOpen && browseBusy)
           _retryNavConnect("Could not open browser")
@@ -904,6 +916,8 @@ Item {
       directorGet("/api/v1/items/datatoui?SubscriptionClient=" + encodeURIComponent(cid), function(err, body) {
         // MSP DATA_RECEIVED only arrives after this subscription. Going "live"
         // without it leaves GetTabList hanging until the browse timeout.
+        root._navDebug = "datatoui err=" + String(err || "")
+            + " bodyLen=" + String(body ? String(body).length : 0)
         if (err || !body) {
           root._navPhase = ""
           root._retryNavConnect("Could not open browser")
@@ -914,6 +928,7 @@ Item {
           root._navSubId = json && json.subscriptionId ? String(json.subscriptionId) : ""
         } catch (e) {
           root._navSubId = ""
+          root._navDebug += " parseFail"
         }
         if (root._navSubId)
           root._navPostRaw("42[\"startSubscription\",\"" + root._navSubId + "\"]", 12)
@@ -1579,6 +1594,10 @@ Item {
     onTriggered: {
       root._navWaitSeq = 0
       root._navWaitCb = null
+      // Connect already settled (tabs loaded, or terminal fail hint). Do not
+      // overwrite "Could not open browser" with "did not respond".
+      if (root.browseOpen && !root.browseBusy)
+        return
       // Still waiting on the navigator session itself.
       if (root.browseOpen && root.browseBusy && (!root.browseRows || !root.browseRows.length)
           && root._navPhase !== "live") {
@@ -1675,7 +1694,8 @@ Item {
         mspDeviceId: root._mspDeviceId,
         mspSvc: root._mspSvc,
         navConnectTries: root._navConnectTries,
-        browseTries: root._browseTries
+        browseTries: root._browseTries,
+        navDebug: root._navDebug
       })
     }
 

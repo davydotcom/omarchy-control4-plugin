@@ -17,7 +17,7 @@ const {
   stateFileReadCommand, stateFileWriteCommand, STATE_FILE_PYTHON,
   isOversizedResponse,
   networkErrorMessage, isTransientCurl,
-  normalizeHost, credentialsComplete, statusTextFor, accountAuthBody,
+  normalizeHost, credentialsComplete, statusTextFor, sessionWatchdogAction, accountAuthBody,
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
   STATUS_SIGN_IN_FAILED, STATUS_DIRECTOR_401, STATUS_CONNECTED,
   extractRooms, isRoomHidden, parseFocusFile, sortRoomsByNameThenId,
@@ -245,6 +245,16 @@ assert(statusTextFor("auth-failed", "cloud", "", true, false) === STATUS_SIGN_IN
 assert(statusTextFor("auth-failed", "director401", "", true, false) === STATUS_DIRECTOR_401, "director 401 copy")
 assert(statusTextFor("connected", "", "", true, true) === STATUS_CONNECTED, "connected")
 assert(statusTextFor("error", "", "Network error", true, false) === "Network error", "error lastError")
+
+const wallNow = 1790640769000
+assert(sessionWatchdogAction("connected", wallNow + 1000, wallNow) === "", "watchdog idle before refresh deadline")
+assert(sessionWatchdogAction("connected", wallNow - 32 * 3600 * 1000, wallNow) === "refresh",
+  "watchdog refreshes a token whose deadline passed during suspend")
+assert(sessionWatchdogAction("connected", 0, wallNow) === "", "watchdog ignores an unarmed deadline")
+assert(sessionWatchdogAction("error", 0, wallNow) === "reconnect", "watchdog keeps retrying after quick retries run out")
+assert(sessionWatchdogAction("connecting", wallNow - 1, wallNow) === "", "watchdog leaves an in-flight connect alone")
+assert(sessionWatchdogAction("auth-failed", 0, wallNow) === "", "watchdog does not retry bad credentials")
+assert(sessionWatchdogAction("unconfigured", 0, wallNow) === "", "watchdog idle when unconfigured")
 assert(networkErrorMessage(28) === "Request timed out", "timeout message")
 assert(networkErrorMessage(7) === "Could not connect", "connect message")
 assert(networkErrorMessage(26) === "Could not read request body", "missing body message")

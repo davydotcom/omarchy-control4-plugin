@@ -261,6 +261,17 @@ function isTransientCurl(exitCode) {
     || code === 52 || code === 56 || code === 15 || code === 130 || code === 143
 }
 
+// refreshAt and now are wall-clock ms. Qt timers run on the monotonic clock,
+// which stops while the laptop is suspended, so a one-shot refresh timer fires
+// hours after the Director token has already expired.
+function sessionWatchdogAction(sessionState, refreshAt, now) {
+  if (sessionState === "connected" && refreshAt > 0 && now >= refreshAt)
+    return "refresh"
+  if (sessionState === "error")
+    return "reconnect"
+  return ""
+}
+
 function statusTextFor(sessionState, authFailedKind, lastError, hasCredentials, hasToken) {
   if (sessionState === "connecting")
     return STATUS_CONNECTING

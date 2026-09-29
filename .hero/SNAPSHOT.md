@@ -1,6 +1,6 @@
 # Project Snapshot — omarchy-control4-plugin
 
-_Last refreshed: 2026-08-31T17:21:36Z · projected from 49 source nodes_
+_Last refreshed: 2026-09-29T00:19:54Z · projected from 49 source nodes_
 
 ## Surfaces
 
@@ -24,7 +24,7 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 
 ## Recently completed (last 14 days)
 
-- **(unassigned)** — apple-music-could-not-open-browser, stream-curl-transport, control4-focused-room-remote, room-now-playing, halo-panel-chrome, room-volume-mute-off, listen-library-browse, volume-slider-reads-room-name, watch-and-listen, virtual-remote-numbers, watch-source-virtual-remote, drop-halo-row-accent-tick
+_Nothing recent._
 
 ## Next up across surfaces
 

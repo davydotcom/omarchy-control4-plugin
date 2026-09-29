@@ -96,6 +96,8 @@ Item {
   property string _accountToken: ""
   property string _directorToken: ""
   property int _validSeconds: 86400
+  property real _refreshAt: 0
+  property real _tokenAt: 0
   property bool _refreshing: false
   property bool _hydrating: false
   property bool _autoConnectPending: false
@@ -135,14 +137,14 @@ Item {
     _accountToken = ""
     authFailedKind = ""
     lastError = ""
-    refreshTimer.stop()
+    _refreshAt = 0
     _abortHttp()
     _setState("connecting")
     _startAccountAuth()
   }
 
   function disconnect() {
-    refreshTimer.stop()
+    _refreshAt = 0
     _abortHttp()
     _accountToken = ""
     _directorToken = ""
@@ -233,7 +235,7 @@ Item {
   function _setState(next) {
     sessionState = next
     if (next === "auth-failed" || next === "error")
-      refreshTimer.stop()
+      _refreshAt = 0
     if (next === "connected")
       _errorRetries = 0
     _refreshStatusText()
@@ -1280,6 +1282,11 @@ Item {
         cb("", parsed.body, parsed.status)
       else
         cb("HTTP " + parsed.status, parsed.body, parsed.status)
+      // An expired token otherwise reads as "Connected" while every call fails.
+      // The age floor stops an endpoint that always 401s from looping sign-in.
+      if (parsed.status === 401 && sessionState === "connected" && job
+          && job.token === _directorToken && Date.now() - _tokenAt > 60000)
+        _refreshSession()
       _pump()
       return
     }
@@ -1368,6 +1375,7 @@ Item {
         return
       }
       _directorToken = director.token
+      _tokenAt = Date.now()
       _validSeconds = director.validSeconds
       if (_refreshing) {
         _refreshing = false
@@ -1408,8 +1416,19 @@ Item {
     var ms = Math.floor(_validSeconds * 0.8 * 1000)
     if (ms < 60000)
       ms = 60000
-    refreshTimer.interval = ms
-    refreshTimer.restart()
+    _refreshAt = Date.now() + ms
+  }
+
+  function _refreshSession() {
+    if (!configured) {
+      _setState("unconfigured")
+      return
+    }
+    if (_refreshing)
+      return
+    _refreshing = true
+    _accountToken = ""
+    _startAccountAuth()
   }
 
   function loadCredentials(raw) {
@@ -1552,6 +1571,8 @@ Item {
     onExited: {
       if (root._ignoreHttpExit) {
         root._ignoreHttpExit = false
+        // Jobs enqueued after the abort found running still true and waited.
+        root._pump()
         return
       }
       // The shell's own exit status is head's, not curl's — curl's code and the
@@ -1644,16 +1665,16 @@ Item {
   }
 
   Timer {
-    id: refreshTimer
-    repeat: false
+    id: sessionWatchdog
+    interval: 30000
+    repeat: true
+    running: root.configured
     onTriggered: {
-      if (!root.configured) {
-        root._setState("unconfigured")
-        return
-      }
-      root._refreshing = true
-      root._accountToken = ""
-      root._startAccountAuth()
+      var action = DirectorClient.sessionWatchdogAction(root.sessionState, root._refreshAt, Date.now())
+      if (action === "refresh")
+        root._refreshSession()
+      else if (action === "reconnect")
+        root.connectNow()
     }
   }
 
@@ -1691,6 +1712,8 @@ Item {
         navPhase: root._navPhase,
         hasNavClient: !!root._navClientId,
         hasToken: !!root._directorToken,
+        tokenAgeSeconds: root._tokenAt > 0 ? Math.round((Date.now() - root._tokenAt) / 1000) : null,
+        refreshDueInSeconds: root._refreshAt > 0 ? Math.round((root._refreshAt - Date.now()) / 1000) : null,
         mspDeviceId: root._mspDeviceId,
         mspSvc: root._mspSvc,
         navConnectTries: root._navConnectTries,

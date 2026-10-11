@@ -1,6 +1,6 @@
 ---
 user: david-estes
-updated: 2026-09-29T00:19:54Z
+updated: 2026-10-11T13:17:58Z
 repo: davydotcom/omarchy-control4-plugin
 ---
 
@@ -10,15 +10,15 @@ repo: davydotcom/omarchy-control4-plugin
 
 > Listen Apple Music should list personal stations via MSP navigator, not fake folders
 
-_possibly stale — 16 commit(s) since, last set 36d 10h ago_
+_possibly stale — 18 commit(s) since, last set 48d 23h ago_
 
 ## Last user ask
 
-> deliver apple-music-could-not-open-browser
+> Deliver agent-browse: agent browse/browseTap/browseBack/browseClose IPC + skill so agents can play Apple Music stations and TuneIn radio
 
 ## Suggested next prompt
 
-> Commit the Service.qml Apple Music nav hard-reset (apple-music-could-not-open-browser) when ready.
+> Commit the three uncommitted deliveries (agent-skill, great-room-volume-not-applied, agent-browse) — plugin 0.8.0
 
 ## Recent reflections
 

@@ -92,6 +92,7 @@ Item {
   property var _volumeHoldUntil: 0
   property int _volumeGen: 0
   property bool _volumePending: false
+  property string _lastRoomCommand: ""
 
   property string _accountToken: ""
   property string _directorToken: ""
@@ -985,10 +986,14 @@ Item {
     _roomCommand("SET_VOLUME_LEVEL", { LEVEL: n })
   }
 
-  function toggleMute() {
-    muted = !muted
+  function setMuted(on) {
+    muted = on === true
     _volumeHoldUntil = Date.now() + 1500
-    _roomCommand("MUTE_TOGGLE", {})
+    _roomCommand(muted ? "MUTE_ON" : "MUTE_OFF", {})
+  }
+
+  function toggleMute() {
+    setMuted(!muted)
   }
 
   function roomOff() {
@@ -1044,7 +1049,9 @@ Item {
   function _roomCommand(command, params) {
     if (sessionState !== "connected" || focusedRoomId === null || focusedRoomId === undefined)
       return
-    directorPost("/api/v1/items/" + focusedRoomId + "/commands", command, params || {}, function() {})
+    directorPost("/api/v1/items/" + focusedRoomId + "/commands", command, params || {}, function(err, body, status) {
+      root._lastRoomCommand = command + " " + (err || ("HTTP " + status))
+    })
   }
 
   function _rebuildSources(allowFlip) {
@@ -1686,9 +1693,169 @@ Item {
     onTriggered: root.refreshVolume()
   }
 
-  // Dev / recovery harness: qs -p /usr/share/omarchy/shell ipc call io.github.davydotcom.control4 status
+  function _agentRoomGuard() {
+    if (sessionState !== "connected")
+      return "not-connected:" + sessionState
+    if (focusedRoomId === null || focusedRoomId === undefined)
+      return "no-room"
+    return ""
+  }
+
+  // Agent control surface (skills/control4/SKILL.md) plus dev probes (status, browseApple):
+  //   omarchy-shell io.github.davydotcom.control4 <method> [args]
+  // No method may return credentials, the controller IP, tokens, or navigator ids.
   IpcHandler {
     target: "io.github.davydotcom.control4"
+
+    function state(): string {
+      return JSON.stringify(DirectorClient.agentState({
+        sessionState: root.sessionState,
+        statusText: root.statusText,
+        focusedRoomId: root.focusedRoomId,
+        focusedRoomName: root.focusedRoomName,
+        roomOn: root.roomOn,
+        lastDeviceGroup: root.lastDeviceGroup,
+        playingSourceName: root.playingSourceName,
+        volume: root.volume,
+        muted: root.muted,
+        roomsHint: root.roomsHint
+      }))
+    }
+
+    function rooms(): string {
+      if (root.sessionState !== "connected")
+        return "not-connected:" + root.sessionState
+      return JSON.stringify(DirectorClient.agentRooms(root.rooms, root.focusedRoomId))
+    }
+
+    function focusRoom(id: string): string {
+      if (root.sessionState !== "connected")
+        return "not-connected:" + root.sessionState
+      var n = DirectorClient.parseIdArg(id)
+      if (n === null || !root._roomById(n))
+        return "unknown-room:" + id
+      root.setFocusedRoom(n)
+      return "ok:" + n
+    }
+
+    function sources(mode: string): string {
+      var guard = root._agentRoomGuard()
+      if (guard)
+        return guard
+      if (mode !== "watch" && mode !== "listen")
+        return "bad-mode:" + mode
+      var list = DirectorClient.extractSources(root._uiConfig, root._items, root.focusedRoomId, mode)
+      return JSON.stringify(list.map(function(s) { return { id: s.id, name: s.name } }))
+    }
+
+    function selectSource(mode: string, id: string): string {
+      var guard = root._agentRoomGuard()
+      if (guard)
+        return guard
+      if (mode !== "watch" && mode !== "listen")
+        return "bad-mode:" + mode
+      var n = DirectorClient.parseIdArg(id)
+      var list = DirectorClient.extractSources(root._uiConfig, root._items, root.focusedRoomId, mode)
+      var found = false
+      for (var i = 0; n !== null && i < list.length; i++) {
+        if (Number(list[i].id) === n)
+          found = true
+      }
+      if (!found)
+        return "unknown-source:" + id
+      if (root.sourceMode !== mode)
+        root.setSourceMode(mode)
+      root.selectSource(n)
+      return "started:" + mode + ":" + n
+    }
+
+    function setVolume(level: string): string {
+      var guard = root._agentRoomGuard()
+      if (guard)
+        return guard
+      var n = DirectorClient.parseVolumeArg(level)
+      if (n === null)
+        return "bad-level:" + level
+      root.setVolume(n)
+      return "started:" + n
+    }
+
+    function setMute(value: string): string {
+      var guard = root._agentRoomGuard()
+      if (guard)
+        return guard
+      if (value !== "on" && value !== "off" && value !== "toggle")
+        return "bad-mute:" + value
+      if (value === "toggle")
+        root.toggleMute()
+      else
+        root.setMuted(value === "on")
+      return "started:" + (root.muted ? "on" : "off")
+    }
+
+    function off(): string {
+      var guard = root._agentRoomGuard()
+      if (guard)
+        return guard
+      root.roomOff()
+      return "started:off"
+    }
+
+    function browse(): string {
+      return JSON.stringify(DirectorClient.agentBrowse({
+        browseOpen: root.browseOpen,
+        browseBusy: root.browseBusy,
+        mspSvc: root._mspSvc,
+        browseTitle: root.browseTitle,
+        browseHint: root.browseHint,
+        depth: root._browseStack ? root._browseStack.length : 0,
+        rows: root.browseRows
+      }))
+    }
+
+    function browseTap(index: string): string {
+      var guard = root._agentRoomGuard()
+      if (guard)
+        return guard
+      if (!root.browseOpen)
+        return "browse-closed"
+      if (root.browseBusy)
+        return "browse-busy"
+      var rows = root.browseRows || []
+      var n = DirectorClient.parseIdArg(index)
+      if (n === null || n >= rows.length)
+        return "bad-index:" + index
+      var kind = DirectorClient.browseRowKind(rows[n])
+      if (kind === "header")
+        return "header-row:" + n
+      root.browseTap(n)
+      return "started:" + (kind === "play" ? "play" : "open") + ":" + n
+    }
+
+    function browseBack(): string {
+      var guard = root._agentRoomGuard()
+      if (guard)
+        return guard
+      if (!root.browseOpen)
+        return "browse-closed"
+      if (root.browseBusy)
+        return "browse-busy"
+      if (!root._browseStack || !root._browseStack.length) {
+        root.closeBrowse()
+        return "ok:closed"
+      }
+      root.browseBack()
+      return "ok:back:" + root._browseStack.length
+    }
+
+    function browseClose(): string {
+      var guard = root._agentRoomGuard()
+      if (guard)
+        return guard
+      if (root.browseOpen)
+        root.closeBrowse()
+      return "ok:closed"
+    }
 
     function status(): string {
       var rows = root.browseRows
@@ -1718,7 +1885,9 @@ Item {
         mspSvc: root._mspSvc,
         navConnectTries: root._navConnectTries,
         browseTries: root._browseTries,
-        navDebug: root._navDebug
+        navDebug: root._navDebug,
+        lastRoomCommand: root._lastRoomCommand,
+        volumeCaps: DirectorClient.volumeCaps(root._items, root.currentVideoDeviceId, root.playingAudioDeviceId)
       })
     }
 
@@ -1750,16 +1919,6 @@ Item {
         return "no-apple-source"
       root.selectSource(appleId)
       return "started:" + String(appleId)
-    }
-
-    function browseTap(index: string): string {
-      var n = Number(index)
-      if (!isFinite(n))
-        return "bad-index"
-      if (!root.browseOpen)
-        return "browse-closed"
-      root.browseTap(n)
-      return "tapped:" + String(n)
     }
   }
 

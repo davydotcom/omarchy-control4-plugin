@@ -21,6 +21,7 @@ const {
   APPLICATION_KEY, STATUS_NOT_CONFIGURED, STATUS_NOT_CONNECTED,
   STATUS_SIGN_IN_FAILED, STATUS_DIRECTOR_401, STATUS_CONNECTED,
   extractRooms, isRoomHidden, parseFocusFile, sortRoomsByNameThenId,
+  agentState, agentRooms, parseVolumeArg, parseIdArg, volumeCaps, browseRowKind, agentBrowse,
   extractSources, sourceArray, parseRoomVolume, nowPlayingLabel, parseRemoteCapabilities, hasRemoteCommand,
   itemForWatchRemote, findItemById, hasWatchRemoteUi, surroundModeParams, matchWatchSourceId,
   parseEngineIoSid, parseSocketIoClientId, parseMspResponse, parseMspResponses, mspArgXml,
@@ -437,6 +438,29 @@ assert(clamped.volume === 100, "parseRoomVolume clamp")
 
 const setVol = JSON.parse(commandBody("SET_VOLUME_LEVEL", { LEVEL: 42 }))
 assert(setVol.command === "SET_VOLUME_LEVEL" && setVol.tParams.LEVEL === 42, "SET_VOLUME_LEVEL body")
+for (const cmd of ["MUTE_ON", "MUTE_OFF"]) {
+  const muteBody = JSON.parse(commandBody(cmd, {}))
+  assert(muteBody.async === true && muteBody.command === cmd && Object.keys(muteBody.tParams).length === 0,
+    cmd + " body")
+}
+
+const capItems = [
+  { id: 443, name: "Great Room Display", capabilities: {
+    has_discrete_volume_control: true, has_up_down_volume_control: "True",
+    has_toggle_mute_control: true, has_discrete_mute_control: "False", show_transport: true } },
+  { id: 434, name: "Apple Music" }
+]
+const caps = volumeCaps(capItems, 443, 434)
+assert(JSON.stringify(Object.keys(caps.video)) ===
+  JSON.stringify(["id", "discreteVolume", "upDownVolume", "discreteMute", "toggleMute"]), "volumeCaps keys only")
+assert(caps.video.id === 443 && caps.video.discreteVolume === "true" && caps.video.upDownVolume === "True"
+  && caps.video.discreteMute === "False" && caps.video.toggleMute === "true", "volumeCaps raw strings")
+assert(!JSON.stringify(caps).includes("Great Room Display"), "volumeCaps carries no item names")
+assert(caps.audio.id === 434 && caps.audio.discreteVolume === null && caps.audio.toggleMute === null,
+  "volumeCaps item without capabilities")
+const noIds = volumeCaps(capItems, null, 999)
+assert(noIds.video === null && noIds.audio === null, "volumeCaps missing ids")
+assert(volumeCaps(null, 443, 434).video === null, "volumeCaps no items")
 
 const sid = parseEngineIoSid('0{"sid":"abc123","upgrades":[]}')
 assert(sid === "abc123", "parseEngineIoSid")
@@ -767,5 +791,138 @@ const serviceQml = fs.readFileSync(path.join(__dirname, "..", "Service.qml"), "u
 assert(!serviceQml.includes("FileView"), "state files must not use FileView")
 assert(serviceQml.includes("stateFileReadCommand"), "bounded state read")
 assert(serviceQml.includes("stateFileWriteCommand"), "bounded state write")
+
+// Agent IPC surface (agent-skill spec)
+const AGENT_STATE_KEYS = ["connected", "sessionState", "statusText", "roomId", "roomName",
+  "power", "playingGroup", "playingName", "volume", "muted", "hint"]
+const leaky = agentState({
+  sessionState: "connected", statusText: "Connected", focusedRoomId: 13, focusedRoomName: "Great Room",
+  roomOn: true, lastDeviceGroup: "watch", playingSourceName: "Apple TV", volume: 32, muted: false,
+  roomsHint: "", email: "me@example.com", password: "hunter2", controllerIp: "10.0.0.5",
+  _accountToken: "acct-secret", _directorToken: "jwt-secret", _navClientId: "nav-secret",
+  _navCookiePath: "/tmp/nav-cookies.txt"
+})
+assert(JSON.stringify(Object.keys(leaky)) === JSON.stringify(AGENT_STATE_KEYS), "agentState exact key whitelist")
+const leakyJson = JSON.stringify(leaky)
+for (const secret of ["me@example.com", "hunter2", "10.0.0.5", "acct-secret", "jwt-secret", "nav-secret", "nav-cookies"])
+  assert(!leakyJson.includes(secret), "agentState must not leak " + secret)
+assert(leaky.connected === true && leaky.roomId === 13 && leaky.roomName === "Great Room"
+  && leaky.playingGroup === "watch" && leaky.playingName === "Apple TV" && leaky.volume === 32,
+  "agentState values")
+assert(agentState({ roomOn: true }).power === "on", "agentState power on")
+assert(agentState({ roomOn: false }).power === "off", "agentState power off")
+assert(agentState({ roomOn: null }).power === "unknown", "agentState power unknown")
+const authFailed = agentState({ sessionState: "auth-failed", statusText: "Sign-in failed", focusedRoomId: null })
+assert(authFailed.connected === false && authFailed.sessionState === "auth-failed", "agentState not connected")
+assert(authFailed.roomId === null && authFailed.roomName === "", "agentState no room")
+assert(JSON.stringify(Object.keys(authFailed)) === JSON.stringify(AGENT_STATE_KEYS), "agentState keys when disconnected")
+
+const agentRoomList = agentRooms([{ id: 9, name: "Den" }, { id: 13, name: "Great Room" }], 13)
+assert(agentRoomList.length === 2 && agentRoomList[0].focused === false && agentRoomList[1].focused === true,
+  "agentRooms marks only focused")
+assert(JSON.stringify(Object.keys(agentRoomList[0])) === JSON.stringify(["id", "name", "focused"]), "agentRooms shape")
+assert(agentRooms([{ id: 9, name: "Den" }], null)[0].focused === false, "agentRooms no focus")
+assert(agentRooms(null, 1).length === 0, "agentRooms null list")
+
+assert(parseVolumeArg("30") === 30, "parseVolumeArg 30")
+assert(parseVolumeArg(" 7 ") === 7, "parseVolumeArg trims")
+assert(parseVolumeArg("150") === 100, "parseVolumeArg clamps")
+assert(parseVolumeArg("0") === 0, "parseVolumeArg zero")
+for (const bad of ["", " ", "abc", "30%", "-5", "3.5", null, undefined])
+  assert(parseVolumeArg(bad) === null, "parseVolumeArg rejects " + JSON.stringify(bad))
+
+assert(parseIdArg("13") === 13, "parseIdArg 13")
+for (const bad of ["", "abc", "1.5", "-1", null])
+  assert(parseIdArg(bad) === null, "parseIdArg rejects " + JSON.stringify(bad))
+
+const ipcBlock = serviceQml.slice(serviceQml.indexOf("IpcHandler {"))
+for (const sig of ["function state(): string", "function rooms(): string", "function focusRoom(id: string): string",
+  "function sources(mode: string): string", "function selectSource(mode: string, id: string): string",
+  "function setVolume(level: string): string", "function setMute(value: string): string", "function off(): string",
+  "function status(): string", "function browseApple(): string", "function browseTap(index: string): string",
+  "function browse(): string", "function browseBack(): string", "function browseClose(): string"])
+  assert(ipcBlock.includes(sig), "IPC method " + sig)
+for (const m of ["sources(mode: string)", "selectSource(mode: string, id: string)", "setVolume(level: string)",
+  "setMute(value: string)", "off()", "browseTap(index: string)", "browseBack()", "browseClose()"]) {
+  const body = ipcBlock.slice(ipcBlock.indexOf("function " + m))
+  assert(/^function [^{]+\{\s*var guard = root\._agentRoomGuard\(\)\s*if \(guard\)\s*return guard/.test(body),
+    "IPC " + m + " must check _agentRoomGuard before acting")
+}
+for (const m of ["rooms()", "focusRoom(id: string)"]) {
+  const body = ipcBlock.slice(ipcBlock.indexOf("function " + m))
+  assert(/^function [^{]+\{\s*if \(root\.sessionState !== "connected"\)\s*return "not-connected:" \+ root\.sessionState/.test(body),
+    "IPC " + m + " must check the session first")
+}
+assert(/function _agentRoomGuard\(\) \{\s*if \(sessionState !== "connected"\)\s*return "not-connected:" \+ sessionState\s*if \(focusedRoomId === null \|\| focusedRoomId === undefined\)\s*return "no-room"/.test(serviceQml),
+  "_agentRoomGuard returns not-connected then no-room")
+// Agent browse (agent-browse spec)
+assert(browseRowKind(tabs[0]) === "folder", "browseRowKind Apple tab is folder")
+assert(browseRowKind(items[0]) === "folder", "browseRowKind My Personal Station link is folder")
+assert(browseRowKind(one[0]) === "play", "browseRowKind station is play")
+assert(browseRowKind({ title: "Chill Mix", itemType: "library-playlists", actionsList: "PlayNow PlayShuffle" }) === "play",
+  "browseRowKind playlist is play")
+assert(browseRowKind({ title: "Genre", itemType: "genre", defaultAction: "SelectItem" }) === "folder",
+  "browseRowKind Apple row without a play command drills")
+assert(browseRowKind(tuneInStations[0]) === "header", "browseRowKind TuneIn header")
+assert(browseRowKind(tuneInTabs[0]) === "folder", "browseRowKind TuneIn tab")
+assert(browseRowKind(tuneInFolder[0]) === "folder", "browseRowKind TuneIn folder")
+assert(browseRowKind(tuneInStations[1]) === "play", "browseRowKind TuneIn station")
+
+const tuneInBrowse = agentBrowse({ browseOpen: true, browseBusy: false, mspSvc: "tunein", browseTitle: "Local Radio",
+  browseHint: "", depth: 2, rows: tuneInStations })
+assert(JSON.stringify(Object.keys(tuneInBrowse)) ===
+  JSON.stringify(["open", "busy", "service", "title", "hint", "depth", "rows"]), "agentBrowse key order")
+assert(JSON.stringify(Object.keys(tuneInBrowse.rows[0])) === JSON.stringify(["index", "title", "subtitle", "kind"]),
+  "agentBrowse row key order")
+assert(tuneInBrowse.service === "tunein" && tuneInBrowse.depth === 2 && tuneInBrowse.rows.length === 2, "agentBrowse values")
+assert(tuneInBrowse.rows[0].kind === "header" && tuneInBrowse.rows[1].index === 1 && tuneInBrowse.rows[1].kind === "play"
+  && tuneInBrowse.rows[1].subtitle === "US News" && tuneInBrowse.rows[1].title === "90.1 | WFYI", "agentBrowse rows keep header index")
+const tuneInBrowseJson = JSON.stringify(tuneInBrowse)
+for (const noise of ["Tune.ashx", "s28930", "logo.png", "\"itemProp\"", "\"screen\""])
+  assert(!tuneInBrowseJson.includes(noise), "agentBrowse omits " + noise)
+assert(tuneInBrowseJson.includes('"busy":false'), "agentBrowse compact busy flag")
+const appleBrowseJson = JSON.stringify(agentBrowse({ browseOpen: true, browseBusy: true, mspSvc: "apple",
+  browseTitle: "Stations", browseHint: "Loading…", depth: 1, rows: items.concat(one) }))
+assert(!appleBrowseJson.includes("/v1/personal") && !appleBrowseJson.includes("ra.u-1") && !appleBrowseJson.includes("ListScreen"),
+  "agentBrowse omits MSP ids and screens")
+assert(appleBrowseJson.includes('"busy":true') && appleBrowseJson.includes('"service":"apple"'), "agentBrowse apple flags")
+const closedBrowse = agentBrowse({ browseOpen: false, browseBusy: false, mspSvc: "", browseTitle: "", browseHint: "",
+  depth: 0, rows: [] })
+assert(closedBrowse.open === false && closedBrowse.service === "" && closedBrowse.depth === 0 && closedBrowse.rows.length === 0,
+  "agentBrowse closed")
+assert(agentBrowse({ mspSvc: "spotify", rows: null, depth: -3 }).service === "" && agentBrowse({ depth: "x" }).depth === 0,
+  "agentBrowse unknown service and bad depth")
+
+const ipcBrowseTap = ipcBlock.slice(ipcBlock.indexOf("function browseTap("), ipcBlock.indexOf("function browseBack()"))
+assert(ipcBrowseTap.includes("DirectorClient.parseIdArg(index)") && ipcBrowseTap.includes("root.browseBusy")
+  && !ipcBrowseTap.includes("Number(index)"), "IPC browseTap parses the index and refuses while busy")
+const ipcBrowseBack = ipcBlock.slice(ipcBlock.indexOf("function browseBack()"), ipcBlock.indexOf("function browseClose()"))
+assert(ipcBrowseBack.includes("root.browseBusy"), "IPC browseBack refuses while busy")
+for (const m of ["function browse()", "function browseTap(", "function browseBack()", "function browseClose()"])
+  assert(ipcBlock.indexOf(m) > ipcBlock.indexOf("function off()") && ipcBlock.indexOf(m) < ipcBlock.indexOf("function status()"),
+    m + " sits between off() and the dev probes")
+const svcBrowseTap = serviceQml.slice(serviceQml.indexOf("  function browseTap(index) {"), serviceQml.indexOf("  function _tuneInTap(row) {"))
+const svcTuneInTap = serviceQml.slice(serviceQml.indexOf("  function _tuneInTap(row) {"), serviceQml.indexOf("  function _tuneInBrowse("))
+assert(svcBrowseTap.includes('if (row.svc === "tunein")') && svcBrowseTap.includes('action === "BrowseTab" || kind === "tab"')
+  && svcBrowseTap.includes("DirectorClient.mspPlayCommand(row)"), "browseRowKind mirrors Service browseTap branches")
+assert(svcTuneInTap.includes("if (row.isHeader)") && svcTuneInTap.includes("if (row.isTab || row.folder)"),
+  "browseRowKind mirrors Service _tuneInTap branches")
+
+const panelSrc = fs.readFileSync(path.join(__dirname, "..", "Panel.qml"), "utf8")
+assert(!serviceQml.includes("MUTE_TOGGLE") && !panelSrc.includes("MUTE_TOGGLE"), "mute must use MUTE_ON / MUTE_OFF")
+assert(/function setMuted\(on\) \{\s*muted = on === true[\s\S]{0,80}_roomCommand\(muted \? "MUTE_ON" : "MUTE_OFF", \{\}\)/.test(serviceQml),
+  "setMuted posts the discrete command for the requested state")
+assert(/function toggleMute\(\) \{\s*setMuted\(!muted\)\s*\}/.test(serviceQml), "toggleMute delegates to setMuted")
+const ipcSetMute = ipcBlock.slice(ipcBlock.indexOf("function setMute("), ipcBlock.indexOf("function off()"))
+assert(!ipcSetMute.includes("ok:unchanged") && ipcSetMute.includes("root.setMuted(value === \"on\")"),
+  "IPC setMute always sends on/off")
+assert(serviceQml.includes("lastRoomCommand: root._lastRoomCommand")
+  && serviceQml.includes("volumeCaps: DirectorClient.volumeCaps(root._items, root.currentVideoDeviceId, root.playingAudioDeviceId)"),
+  "status() exposes lastRoomCommand and volumeCaps")
+assert(/_roomCommand\(command, params\) \{[\s\S]{0,300}root\._lastRoomCommand = command \+ " " \+ \(err \|\| \("HTTP " \+ status\)\)/.test(serviceQml),
+  "_roomCommand records its result")
+assert(!/_directorToken|_accountToken|password|controllerIp|email/.test(
+  ipcBlock.slice(ipcBlock.indexOf("function state()"), ipcBlock.indexOf("function status()"))),
+  "agent IPC methods must not touch credentials or tokens")
 
 console.log("ok")

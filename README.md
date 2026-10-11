@@ -82,12 +82,14 @@ Copy these files from this repo into the live plugin folder:
 - `DirectorClient.js`
 - `icon.png`
 - `icon-off.png`
+- `skills/control4/SKILL.md`
 
 ```sh
 PLUGIN_ID=io.github.davydotcom.control4
 PLUGIN_DIR="$HOME/.config/omarchy/plugins/$PLUGIN_ID"
-mkdir -p "$PLUGIN_DIR"
+mkdir -p "$PLUGIN_DIR" "$PLUGIN_DIR/skills/control4"
 cp LICENSE README.md manifest.json BarWidget.qml Panel.qml Service.qml DirectorClient.js icon.png icon-off.png "$PLUGIN_DIR"
+cp skills/control4/SKILL.md "$PLUGIN_DIR/skills/control4/"
 omarchy-shell shell rescanPlugins
 # Adding new .qml files to a plugin folder that the running shell already
 # scanned requires a process restart. rescanPlugins is not enough.
@@ -115,16 +117,48 @@ omarchy plugin validate "$HOME/.config/omarchy/plugins/io.github.davydotcom.cont
 - Volume slider shows the room level (0–100); release to set; right-click mutes; Off turns the room off and selects the Off row
 - Press Escape to close the panel
 
+## Agent skill
+
+The plugin ships an AI agent skill at `skills/control4/SKILL.md` so Claude
+Code, Cursor, Codex, and similar agents can run your focused room ("turn on
+Apple TV in the great room", "play my personal station", "play WFYI on
+TuneIn", "what's playing", "volume to 30", "turn the room off"). The plugin
+does not install it. Install it yourself:
+
+```sh
+P="$HOME/.config/omarchy/plugins/io.github.davydotcom.control4"
+mkdir -p ~/.agents/skills/control4 ~/.claude/skills
+cp "$P/skills/control4/SKILL.md" ~/.agents/skills/control4/SKILL.md
+ln -sfn ../../.agents/skills/control4 ~/.claude/skills/control4
+```
+
+Re-run it after a plugin update to refresh the skill.
+
+The agent talks only to the running plugin, over the shell's IPC target. It
+never reads your credentials or calls the controller directly:
+
+```sh
+omarchy-shell io.github.davydotcom.control4 state
+```
+
+Methods: `state`, `rooms`, `focusRoom <id>`, `sources <watch|listen>`,
+`selectSource <watch|listen> <id>`, `setVolume <0-100>`,
+`setMute <on|off|toggle>`, `off`, `browse`, `browseTap <index>`,
+`browseBack`, `browseClose`. `selectSource listen <id>` on Apple Music or
+TuneIn opens the same station browser the panel shows. See the skill for
+return values and the rules agents follow.
+
 ## Remove
 
 ```sh
 omarchy plugin remove io.github.davydotcom.control4
+rm -rf ~/.agents/skills/control4 ~/.claude/skills/control4
 ```
 
-Removing the plugin does not delete the state directory. `credentials.json`,
-`focus.json`, and any leftover `nav-cookies.txt` remain until you delete that
-folder yourself. Disconnect (gear menu) clears `nav-cookies.txt` but keeps
-credentials and focus.
+Removing the plugin does not delete the state directory or the agent skill.
+`credentials.json`, `focus.json`, and any leftover `nav-cookies.txt` remain
+until you delete that folder yourself. Disconnect (gear menu) clears
+`nav-cookies.txt` but keeps credentials and focus.
 
 ## Open to contribution
 

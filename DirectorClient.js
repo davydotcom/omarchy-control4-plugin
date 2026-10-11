@@ -529,6 +529,93 @@ function extractSources(uiConfig, items, roomId, mode) {
   return out
 }
 
+function agentState(s) {
+  var rid = s.focusedRoomId === null || s.focusedRoomId === undefined || s.focusedRoomId === "" ? NaN : Number(s.focusedRoomId)
+  var hasRoom = isFinite(rid)
+  return {
+    connected: s.sessionState === "connected",
+    sessionState: String(s.sessionState || ""),
+    statusText: String(s.statusText || ""),
+    roomId: hasRoom ? rid : null,
+    roomName: hasRoom ? String(s.focusedRoomName || "") : "",
+    power: s.roomOn === true ? "on" : (s.roomOn === false ? "off" : "unknown"),
+    playingGroup: String(s.lastDeviceGroup || ""),
+    playingName: String(s.playingSourceName || ""),
+    volume: Number(s.volume) || 0,
+    muted: s.muted === true,
+    hint: String(s.roomsHint || "")
+  }
+}
+
+function agentRooms(rooms, focusedRoomId) {
+  var list = Array.isArray(rooms) ? rooms : []
+  var fid = focusedRoomId === null || focusedRoomId === undefined ? NaN : Number(focusedRoomId)
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    if (!list[i])
+      continue
+    var id = Number(list[i].id)
+    out.push({ id: id, name: String(list[i].name || ""), focused: id === fid })
+  }
+  return out
+}
+
+function parseVolumeArg(raw) {
+  var text = String(raw == null ? "" : raw)
+  if (!/^\s*\d+\s*$/.test(text))
+    return null
+  return Math.max(0, Math.min(100, Number(text)))
+}
+
+function parseIdArg(raw) {
+  var text = String(raw == null ? "" : raw)
+  if (!/^\s*\d+\s*$/.test(text))
+    return null
+  return Number(text)
+}
+
+// Mirrors the branch order of Service.qml browseTap / _tuneInTap: the kind is
+// what a tap on the row will do.
+function browseRowKind(row) {
+  if (!row)
+    return "folder"
+  if (row.svc === "tunein") {
+    if (row.isHeader)
+      return "header"
+    if (row.isTab || row.folder)
+      return "folder"
+    return "play"
+  }
+  var action = String(row.defaultAction || row.default_action || "")
+  if (action === "BrowseTab" || String(row.itemType || "") === "tab")
+    return "folder"
+  return mspPlayCommand(row) ? "play" : "folder"
+}
+
+function agentBrowse(s) {
+  var list = Array.isArray(s.rows) ? s.rows : []
+  var rows = []
+  for (var i = 0; i < list.length; i++) {
+    var r = list[i] || {}
+    rows.push({
+      index: i,
+      title: String(r.title || ""),
+      subtitle: String(r.subtitle || ""),
+      kind: browseRowKind(list[i])
+    })
+  }
+  var depth = Number(s.depth)
+  return {
+    open: s.browseOpen === true,
+    busy: s.browseBusy === true,
+    service: s.mspSvc === "apple" || s.mspSvc === "tunein" ? s.mspSvc : "",
+    title: String(s.browseTitle || ""),
+    hint: String(s.browseHint || ""),
+    depth: isFinite(depth) && depth > 0 ? Math.floor(depth) : 0,
+    rows: rows
+  }
+}
+
 function _emptyRoomVolume() {
   return {
     volume: null,
@@ -773,6 +860,28 @@ function findItemById(items, id) {
       return list[i]
   }
   return null
+}
+
+// Raw (stringified) flags: the Director's spelling ("True" vs true) is unverified.
+function _volumeCapsOf(items, id) {
+  var item = findItemById(items, id)
+  if (!item)
+    return null
+  var capab = item.capabilities && typeof item.capabilities === "object" ? item.capabilities : {}
+  function raw(key) {
+    return capab[key] == null ? null : String(capab[key])
+  }
+  return {
+    id: Number(item.id),
+    discreteVolume: raw("has_discrete_volume_control"),
+    upDownVolume: raw("has_up_down_volume_control"),
+    discreteMute: raw("has_discrete_mute_control"),
+    toggleMute: raw("has_toggle_mute_control")
+  }
+}
+
+function volumeCaps(items, videoId, audioId) {
+  return { video: _volumeCapsOf(items, videoId), audio: _volumeCapsOf(items, audioId) }
 }
 
 function hasWatchRemoteUi(caps) {

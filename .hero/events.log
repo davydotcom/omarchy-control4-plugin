@@ -62,3 +62,9 @@
 {"ts":"2026-08-31T17:20:29.599911169Z","type":"delivery_complete","agent":"human/david-estes","slug":"apple-music-could-not-open-browser","message":"Apple Music Listen shows Could not open browser"}
 {"ts":"2026-08-31T17:20:29.600002393Z","type":"spec.status_changed","agent":"human/david-estes","slug":"apple-music-could-not-open-browser","message":"status -\u003e completed"}
 {"ts":"2026-08-31T17:20:43.102777718Z","type":"delivery_complete","agent":"mcp/hero","slug":"apple-music-could-not-open-browser","message":"Completed apple-music-could-not-open-browser: MSP nav hard-reset on browse open; verify PASS"}
+{"ts":"2026-10-11T12:25:19.026888727Z","type":"delivery_complete","agent":"human/david-estes","slug":"agent-skill","message":"Agent skill"}
+{"ts":"2026-10-11T12:25:19.027019293Z","type":"spec.status_changed","agent":"human/david-estes","slug":"agent-skill","message":"status -\u003e completed"}
+{"ts":"2026-10-11T13:02:03.186253069Z","type":"delivery_complete","agent":"human/david-estes","slug":"great-room-volume-not-applied","message":"Great Room volume not applied and mute IPC inverts intent"}
+{"ts":"2026-10-11T13:02:03.186329638Z","type":"spec.status_changed","agent":"human/david-estes","slug":"great-room-volume-not-applied","message":"status -\u003e completed"}
+{"ts":"2026-10-11T13:11:17.530871738Z","type":"delivery_complete","agent":"human/david-estes","slug":"agent-browse","message":"Agent browse"}
+{"ts":"2026-10-11T13:11:17.53092127Z","type":"spec.status_changed","agent":"human/david-estes","slug":"agent-browse","message":"status -\u003e completed"}

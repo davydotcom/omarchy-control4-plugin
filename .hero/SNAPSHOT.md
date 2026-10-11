@@ -1,12 +1,12 @@
 # Project Snapshot — omarchy-control4-plugin
 
-_Last refreshed: 2026-09-29T00:19:54Z · projected from 49 source nodes_
+_Last refreshed: 2026-10-11T13:17:58Z · projected from 53 source nodes_
 
 ## Surfaces
 
 | Surface | Stage | Path(s) | Last touched | Driver spec |
 |---|---|---|---|---|
-| (unassigned) | — | — | — | 34 specs without surface |
+| (unassigned) | — | — | — | 37 specs without surface |
 
 _Run `hero snapshot assign` to bucket unassigned specs._
 
@@ -24,7 +24,7 @@ _Run `hero snapshot assign` to bucket unassigned specs._
 
 ## Recently completed (last 14 days)
 
-_Nothing recent._
+- **(unassigned)** — agent-browse, great-room-volume-not-applied, agent-skill
 
 ## Next up across surfaces
 
@@ -37,11 +37,11 @@ _Nothing recent._
 ## Open risks & blockers
 
 - **Blocked specs (6):** `add-room-to-source` (waits on room-session-model); `multi-room-volume-view` (waits on room-session-model); `room-blinds` (waits on experience-switch); `room-climate` (waits on experience-switch); `room-lighting` (waits on experience-switch); `room-scenes` (waits on experience-switch).
-- **Unassigned specs (34) — no `surface:` declared.** Run `hero snapshot assign` to bucket them.
+- **Unassigned specs (37) — no `surface:` declared.** Run `hero snapshot assign` to bucket them.
 
 ## Snapshot health
 
 - Surfaces detected: 0 (inferred: 0 · overrides applied: 0)
-- Specs covered: 0/34 (0%)
-- Projection generation: 0ms · Source nodes: 49
+- Specs covered: 0/37 (0%)
+- Projection generation: 0ms · Source nodes: 53
 
